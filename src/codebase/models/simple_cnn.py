@@ -1,6 +1,8 @@
+import pdb
+import numpy as np
 import tensorflow as tf
 
-class simple_cnn:
+class Simple_CNN:
     '''
     Class for a simple CNN (four convolutional modules)
 
@@ -13,46 +15,46 @@ class simple_cnn:
         - reuse tf.Session()?
     '''
 
-    def __init__(self, opt):
+    def __init__(self, args):
         self.graph = tf.Graph()
         with self.graph.as_default():
             self.input_ph = tf.placeholder(tf.float32, \
-                    shape=[None, opt.im_size, opt.im_size, opt.n_channels])
-            self.targ_ph = tf.placeholder(tf.int32, shape=[None, 1])
+                    shape=[None, args.im_size, args.im_size, args.n_channels])
+            self.targ_ph = tf.placeholder(tf.int32, shape=[None])
             curr_layer = self.input_ph
 
             self.weights = []
-            for i in xrange(opt.n_modules):
+            for i in xrange(6):
                 if not i:
                     weight_init = tf.truncated_normal(
-                            [opt.kern_size, opt.kern_size, opt.n_channels, opt.n_kernels],
+                            [args.kern_size, args.kern_size, args.n_channels, args.n_kernels],
                             stddev=.1)
                 else:
                     weight_init = tf.truncated_normal(
-                            [opt.kern_size, opt.kern_size, opt.n_kernels, opt.n_kernels],
+                            [args.kern_size, args.kern_size, args.n_kernels, args.n_kernels],
                             stddev=.1)
                 weight = tf.Variable(weight_init, name='weights_%d' % i)
                 conv = tf.nn.conv2d(curr_layer, weight, 
-                        [1,1,1,opt.n_channels], 'SAME', name='conv_%d' % i)
-                pool = tf.nn.max_pool(conv, [1,2,2,opt.n_channels], 
-                        [1,2,2,opt.n_channels], 'SAME', name='pad_%d' % i)
-                curr_layer = tf.nn.relu(pool, name='relu_%d' % i)
-                self.weights.append(weights)
+                        [1,1,1,1], 'SAME', name='conv_%d' % i)
+                pool = tf.nn.max_pool(conv, [1,2,2,1], 
+                        [1,2,2,1], 'VALID', name='pad_%d' % i)
+                curr_layer = tf.squeeze(
+                        tf.nn.relu(pool, name='relu_%d' % i))
+                self.weights.append(weight)
 
-            # may need to squeeze here
-            weight_init = tf.truncated_normal([opt.n_kernels, opt.n_classes], stddev=.1)
-            bias_init = tf.truncated_normal([opt.n_classes], stddev=.1)
+            weight_init = tf.truncated_normal([args.n_kernels, args.n_classes], stddev=.1)
+            bias_init = tf.truncated_normal([args.n_classes], stddev=.1)
             weight = tf.Variable(weight_init, name='fc_weight')
             bias = tf.Variable(bias_init, name='fc_bias')
             logits = tf.matmul(curr_layer, weight) + bias
 
             self.loss = tf.reduce_mean(
-                    tf.nn.softmax_cross_entropy_with_logits(logits, self.targ_ph))
+                    tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=self.targ_ph))
             self.optimizer = tf.train.AdamOptimizer().minimize(self.loss)
             self.gradient = tf.gradients(self.loss, [self.input_ph])[0]
             self.predictions = tf.nn.softmax(logits)
 
-    def train(self, data_path):
+    def train(self, tr_data, val_data, args):
         '''
         Train the model using data
 
@@ -62,16 +64,22 @@ class simple_cnn:
             - model saving
         '''
         with tf.Session(graph=self.graph) as session:
-            tf.initialize_all_variables().run()
-            for i in xrange(n_epochs):
-                loss = 0
-                inputs, outputs = data[i]
-                f_dict = {self.input_ph:inputs, self.targ_ph:outputs}
-                _, l, preds = session.run([self.optimizer, self.loss, self.distribution], 
-                        feed_dict=f_dict)
-
-                loss += l
-                print("Epoch %d. Loss: %.3f" % (i, loss))
+            tf.global_variables_initializer().run()
+            for i in xrange(args.n_epochs):
+                loss = 0.
+                accuracy = 0.
+                n_ins = 0.
+                for j in xrange(tr_data.n_batches):
+                    inputs, outputs = tr_data[i]
+                    f_dict = {self.input_ph:inputs, self.targ_ph:outputs}
+                    _, l, preds = session.run(
+                            [self.optimizer, self.loss, self.predictions], 
+                            feed_dict=f_dict)
+                    loss += l
+                    accuracy += np.sum(np.equal(outputs, np.argmax(preds)))
+                    n_ins += inputs.shape[0]
+                print("Epoch %d, loss: %.3f, accuracy: %.3f" % 
+                        (i, loss/tr_data.n_batches, accuracy/ins))
 
     def predict(self, inputs):
         '''
