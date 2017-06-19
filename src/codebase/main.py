@@ -20,8 +20,6 @@ def main(arguments):
 
     # Data options
     parser.add_argument("--data_path", help="Path to hdf5 files containing training data", type=str, default='')
-    #parser.add_argument("--im_size", help="Image size along a side (assuming square currently)", type=int, default=64)
-    #parser.add_argument("--n_channels", help="Number of image channels (1 for B/W, 3 for color)", type=int, default=3)
 
     # Model options
     parser.add_argument("--model", help="Model architecture to use", type=str, default='simple')
@@ -35,7 +33,7 @@ def main(arguments):
     # Training options
     parser.add_argument("--n_epochs", help="Number of epochs to train for", type=int, default=5)
     parser.add_argument("--optimizer", help="Optimization algorithm to use", type=str, default='adam')
-    parser.add_argument("--batch_size", help="Batch size", type=int, default=25)
+    parser.add_argument("--batch_size", help="Batch size", type=int, default=200)
     args = parser.parse_args(arguments)
 
     if args.data_path[-1] != '/':
@@ -44,6 +42,7 @@ def main(arguments):
         args.n_classes = f['n_classes'][0]
         args.im_size = f['im_size'][0]
         args.n_channels = f['n_channels'][0]
+    print("Processing %d types of images of size %d and %d channels" % (args.n_classes, args.im_size, args.n_channels))
 
     # Train or load a model
     if args.load_model_from:

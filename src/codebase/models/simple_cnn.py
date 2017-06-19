@@ -1,4 +1,5 @@
 import pdb
+import time
 import numpy as np
 import tensorflow as tf
 
@@ -63,14 +64,23 @@ class Simple_CNN:
             - logging
             - model saving
         '''
+
         with tf.Session(graph=self.graph) as session:
             tf.global_variables_initializer().run()
+            initial_time = time.time()
+            val_loss, val_acc = self.validate(val_data, session)
+            best_loss, best_acc = val_loss, val_acc
+            print("Training...")
+            print("\tInitial val loss: %.3f, val acc: %.3f in %.3f s" % 
+                    (val_loss, 100.*val_acc, time.time() - initial_time))
+
             for i in xrange(args.n_epochs):
                 loss = 0.
                 accuracy = 0.
                 n_ins = 0.
+                start_time = time.time()
                 for j in xrange(tr_data.n_batches):
-                    inputs, outputs = tr_data[i]
+                    inputs, outputs = tr_data[j]
                     f_dict = {self.input_ph:inputs, self.targ_ph:outputs}
                     _, l, preds = session.run(
                             [self.optimizer, self.loss, self.predictions], 
@@ -78,8 +88,30 @@ class Simple_CNN:
                     loss += l
                     accuracy += np.sum(np.equal(outputs, np.argmax(preds)))
                     n_ins += inputs.shape[0]
-                print("Epoch %d, loss: %.3f, accuracy: %.3f" % 
-                        (i, loss/tr_data.n_batches, accuracy/ins))
+
+                val_loss, val_acc = self.validate(val_data, session)
+                print("\tEpoch %d, loss: %.3f, accuracy: %.3f" % 
+                        (i, loss/tr_data.n_batches, 100.*accuracy/n_ins))
+                print("\t\tval loss: %.3f, val acc: %.3f (%.3f s)" % 
+                        (val_loss, 100.*val_acc, time.time()-start_time))
+        print("Finished training in %.3f s" % (time.time() - initial_time))
+
+    def validate(self, data, session=None):
+        if session is None:
+            session = tf.Session(graph=self.graph) # this won't really work because I need to close it
+        loss = 0.
+        accuracy = 0.
+        n_ins = 0.
+        for i in xrange(data.n_batches):
+            inputs, outputs = data[i]
+            f_dict = {self.input_ph:inputs, self.targ_ph:outputs}
+            l, preds = session.run(
+                    [self.loss, self.predictions], 
+                    feed_dict=f_dict)
+            loss += l
+            accuracy += np.sum(np.equal(outputs, np.argmax(preds)))
+            n_ins += inputs.shape[0]
+        return loss/data.n_batches, accuracy/n_ins
 
     def predict(self, inputs):
         '''
