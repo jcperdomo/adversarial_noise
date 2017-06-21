@@ -18,7 +18,7 @@ def main(arguments):
     # General options
     parser.add_argument("--log_file", help="Path to file to log progress", type=str)
     parser.add_argument("--data_path", help="Path to hdf5 files containing training data", type=str, default='')
-    parser.add_argument("--im_path", help="Path to h5py? file containing images to obfuscate", type=str, default='')
+    parser.add_argument("--im_file", help="Path to h5py? file containing images to obfuscate", type=str, default='')
     parser.add_argument("--out_file", help="Optional hdf5 filepath to write obfuscated images to", type=str)
 
     # Model options
@@ -76,10 +76,10 @@ def main(arguments):
 
     # Load image to obfuscate
     log(log_fh, "Generating noise for images...")
-    with h5py.File(args.im_path, 'r') as fh:
+    with h5py.File(args.im_file, 'r') as fh:
         test_ins = fh['ins'][:]
         test_outs = fh['outs'][:]
-        assert test_ins.shape[1] == args.im_dim and test_ins.shape[2] == args.im_dim
+        assert test_ins.shape[1] == args.im_size and test_ins.shape[2] == args.im_size
         assert test_ins.shape[-1] == args.n_channels
     log(log_fh, "\tLoaded images!")
 
@@ -87,9 +87,9 @@ def main(arguments):
     if args.generator == 'deepfool':
         generator = DeepFool()
     elif args.generator == 'fast_gradient':
-        generator = FastGradientGenerator()
+        generator = FastGradientGenerator(args)
     log(log_fh, "\tGenerator built!")
-    noise = generator.generate(test_ins, model)
+    noise = generator.generate(test_ins, test_outs, model)
     log(log_fh, "\tDone!")
 
     # Compute the corruption rate
