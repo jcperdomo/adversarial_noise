@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from utils.utils import log as log
 
-class Simple_CNN:
+class SimpleCNN:
     '''
     Class for a simple CNN (four convolutional modules)
 
@@ -96,11 +96,11 @@ class Simple_CNN:
             best_loss, best_acc = val_loss, val_acc
             last_acc = val_acc
             log(fh, "\tInitial val loss: %.3f, val acc: %.3f (%.3f s)" % 
-                    (val_loss, 100.*val_acc, time.time() - initial_time))
+                    (val_loss, val_acc, time.time() - initial_time))
 
             # Training loop
             for i in xrange(args.n_epochs):
-                log(fh, "\tEpoch %d, learning rate: %.3f" % (i, learning_rate))
+                log(fh, "\tEpoch %d, learning rate: %.3f" % (i+1, learning_rate))
                 total_loss = 0.
                 total_correct = 0.
                 n_ins = 0.
@@ -120,9 +120,9 @@ class Simple_CNN:
 
                 val_loss, val_acc = self.validate(val_data, session)
                 log(fh, "\t\ttraining loss: %.3f, accuracy: %.3f" % 
-                        (total_loss/tr_data.n_batches, 100.*total_correct/n_ins))
+                        (total_loss/tr_data.n_batches, total_correct/n_ins))
                 log(fh, "\t\tval loss: %.3f, val acc: %.3f (%.3f s)" % 
-                        (val_loss, 100.*val_acc, time.time()-start_time))
+                        (val_loss, val_acc, time.time()-start_time))
                 if val_acc <= last_acc:
                     learning_rate *= .5
                     log(fh, "\t\tLearning rate halved to %.3f" % learning_rate)
@@ -132,7 +132,7 @@ class Simple_CNN:
                     best_acc = val_acc
                 last_acc = best_acc
 
-        log(fh, "Finished training in %.3f s" % (time.time() - initial_time))
+        log(fh, "\tFinished training in %.3f s" % (time.time() - initial_time))
 
     def validate(self, data, session=None):
         if session is None:
@@ -150,7 +150,7 @@ class Simple_CNN:
             total_loss += l
             n_correct += np.sum(np.equal(outputs, np.argmax(preds, axis=1)))
             n_ins += inputs.shape[0]
-        return total_loss/data.n_batches, n_correct/n_ins
+        return total_loss/data.n_batches, 100.* n_correct/n_ins
 
     def get_predictions(self, inputs):
         '''

@@ -1,6 +1,6 @@
 
 
-class fast_gradient_generator:
+class FastGradientGenerator:
     '''
     Class for generating noise using fast gradient method (Goodfellow et al., 2015)
     '''
@@ -18,6 +18,6 @@ class fast_gradient_generator:
         outputs:
             - adversaries: n_images x im_size x im_size x n_channels
         '''
-        gradients = model.gradient(images) # get gradient of model's loss wrt images
+        gradients = model.get_gradient(images) # get gradient of model's loss wrt images
         grad_signs = np.sign(gradients)
         return self.eps*grad_signs
