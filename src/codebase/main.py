@@ -1,3 +1,4 @@
+import pdb
 import sys
 import h5py
 import argparse
@@ -73,8 +74,13 @@ def main(arguments):
     if args.save_model_to:
         raise NotImplementedError
     log(log_fh, "\tDone!")
+    _, val_acc = model.validate(val_data)
+    log(log_fh, "Validation accuracy: %.3f" % val_acc)
 
     # Load image to obfuscate
+    # TODO: clean up this code to be consistent with Dataset class
+    #   - rework generator signature
+    #   - generator is breaking shit
     log(log_fh, "Generating noise for images...")
     with h5py.File(args.im_file, 'r') as fh:
         test_ins = fh['ins'][:]
@@ -82,6 +88,9 @@ def main(arguments):
         assert test_ins.shape[1] == args.im_size and test_ins.shape[2] == args.im_size
         assert test_ins.shape[-1] == args.n_channels
     log(log_fh, "\tLoaded images!")
+    clean_data = Dataset(test_ins, test_outs, args)    
+    _, clean_acc = model.validate(clean_data)
+    log(log_fh, "Clean accuracy: %.3f" % clean_acc)
 
     # Get the noise (either image-specific or universal)
     if args.generator == 'deepfool':
@@ -95,10 +104,10 @@ def main(arguments):
     # Compute the corruption rate
     log(log_fh, "Computing corruption rate...")
     clean_data = Dataset(test_ins, test_outs, args)    
+    _, clean_acc = model.validate(clean_data)
     corrupt_data = Dataset(test_ins + noise, test_outs, args)    
-    _, clean_acc = model.validate(te_data)
-    _, corrupt_acc = model.validate(te_data)
-    log(log_fh, "\tOriginal accuracy: %.3f, new accuracy: %.3f)" % 
+    _, corrupt_acc = model.validate(corrupt_data)
+    log(log_fh, "\tOriginal accuracy: %.3f, new accuracy: %.3f" % 
             (clean_acc, corrupt_acc))
     log(log_fh, "\tDone!")
 
@@ -106,8 +115,8 @@ def main(arguments):
     if args.out_file:
         with h5py.File(args.out_file, 'w') as fh:
             fh['noise'] = noise
-            fh['ims'] = ims
-            fh['noisy_ims'] = ims + noise
+            fh['ims'] = test_ins
+            fh['noisy_ims'] = test_ins + noise
         log(log_fh, "Saved images to %s" % args.out_file)
 
     log_fh.close()
