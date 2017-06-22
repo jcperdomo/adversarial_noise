@@ -43,7 +43,8 @@ def main(arguments):
 
     # Generator options
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
-    parser.add_argument("--eps", help="Max l_inf norm of noise", type=float, default=.1)
+    parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.3)
+    parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
 
     args = parser.parse_args(arguments)
 
@@ -88,9 +89,6 @@ def main(arguments):
         assert test_ins.shape[1] == args.im_size and test_ins.shape[2] == args.im_size
         assert test_ins.shape[-1] == args.n_channels
     log(log_fh, "\tLoaded images!")
-    clean_data = Dataset(test_ins, test_outs, args)    
-    _, clean_acc = model.validate(clean_data)
-    log(log_fh, "Clean accuracy: %.3f" % clean_acc)
 
     # Get the noise (either image-specific or universal)
     if args.generator == 'deepfool':
@@ -98,14 +96,14 @@ def main(arguments):
     elif args.generator == 'fast_gradient':
         generator = FastGradientGenerator(args)
     log(log_fh, "\tGenerator built!")
-    noise = generator.generate(test_ins, test_outs, model)
+    corrupt_ins, noise = generator.generate(test_ins, test_outs, model)
     log(log_fh, "\tDone!")
 
     # Compute the corruption rate
     log(log_fh, "Computing corruption rate...")
     clean_data = Dataset(test_ins, test_outs, args)    
     _, clean_acc = model.validate(clean_data)
-    corrupt_data = Dataset(test_ins + noise, test_outs, args)    
+    corrupt_data = Dataset(corrupt_ins, test_outs, args)    
     _, corrupt_acc = model.validate(corrupt_data)
     log(log_fh, "\tOriginal accuracy: %.3f, new accuracy: %.3f" % 
             (clean_acc, corrupt_acc))
@@ -116,7 +114,7 @@ def main(arguments):
         with h5py.File(args.out_file, 'w') as fh:
             fh['noise'] = noise
             fh['ims'] = test_ins
-            fh['noisy_ims'] = test_ins + noise
+            fh['noisy_ims'] = corrupt_ins
         log(log_fh, "Saved images to %s" % args.out_file)
 
     log_fh.close()
