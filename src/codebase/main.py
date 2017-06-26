@@ -80,32 +80,27 @@ def main(arguments):
     _, val_acc = model.validate(val_data)
     log(log_fh, "Validation accuracy: %.3f" % val_acc)
 
-    # Load image to obfuscate
-    # TODO: clean up this code to be consistent with Dataset class
-    #   - rework generator signature
-    #   - generator is breaking shit
+    # Load images to obfuscate
     log(log_fh, "Generating noise for images...")
     with h5py.File(args.im_file, 'r') as fh:
-        test_ins = fh['ins'][:]
-        test_outs = fh['outs'][:]
-        assert test_ins.shape[1] == args.im_size and test_ins.shape[2] == args.im_size
-        assert test_ins.shape[-1] == args.n_channels
+        te_data = Dataset(fh['ins'][:], fh['outs'][:], args)
     log(log_fh, "\tLoaded images!")
 
-    # Get the noise (either image-specific or universal)
+    # Generate the noise
     if args.generator == 'deepfool':
         generator = DeepFool()
     elif args.generator == 'fast_gradient':
         generator = FastGradientGenerator(args)
+    else:
+        raise NotImplementedError
     log(log_fh, "\tGenerator built!")
-    corrupt_ins, noise = generator.generate(test_ins, test_outs, model)
+    corrupt_ins, noise = generator.generate(te_data, model)
     log(log_fh, "\tDone!")
 
     # Compute the corruption rate
     log(log_fh, "Computing corruption rate...")
-    clean_data = Dataset(test_ins, test_outs, args)    
-    _, clean_acc = model.validate(clean_data)
-    corrupt_data = Dataset(corrupt_ins, test_outs, args)    
+    _, clean_acc = model.validate(te_data)
+    corrupt_data = Dataset(corrupt_ins, te_data.outs, args)    
     _, corrupt_acc = model.validate(corrupt_data)
     log(log_fh, "\tOriginal accuracy: %.3f, new accuracy: %.3f" % 
             (clean_acc, corrupt_acc))
@@ -115,8 +110,8 @@ def main(arguments):
     if args.out_file:
         with h5py.File(args.out_file, 'w') as fh:
             fh['noise'] = noise
-            fh['ims'] = test_ins
-            fh['noisy_ims'] = corrupt_ins
+            fh['ims'] = te_data.ins
+            fh['noisy_ims'] = corrupt_data.ins
         log(log_fh, "Saved images to %s" % args.out_file)
 
     log_fh.close()

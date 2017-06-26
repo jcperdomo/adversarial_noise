@@ -9,12 +9,12 @@ class FastGradientGenerator:
 
     '''
 
-    def __init__(self, args, n_iters):
+    def __init__(self, args):
         self.eps = args.eps
         self.alpha = args.alpha
         self.n_iters = args.n_iters
 
-    def generate(self, ins, outs, model):
+    def generate(self, data, model):
         '''
         Generate adversarial noise using fast gradient method.
 
@@ -25,7 +25,10 @@ class FastGradientGenerator:
             - adversaries: n_images x im_size x im_size x n_channels
             - noise: n_ims x im_size x im_size x n_channels
         '''
-        for _ in self.n_iters:
+        ins = data.ins
+        outs = data.outs
+
+        for _ in xrange(self.n_iters):
             if self.alpha:
                 random_noise = np.random.normal(0, 1, size=ins.shape)
                 ins = ins + self.alpha * random_noise
