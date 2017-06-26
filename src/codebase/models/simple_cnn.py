@@ -91,6 +91,9 @@ class Simple_CNN:
 
             # Initial stuff
             tf.global_variables_initializer().run()
+            if args.save_model_to:
+                saver = tf.train.Saver()
+
             initial_time = time.time()
             val_loss, val_acc = self.validate(val_data, session)
             best_loss, best_acc = val_loss, val_acc
@@ -123,14 +126,15 @@ class Simple_CNN:
                         (total_loss/tr_data.n_batches, 100.*total_correct/n_ins))
                 log(fh, "\t\tval loss: %.3f, val acc: %.3f (%.3f s)" % 
                         (val_loss, 100.*val_acc, time.time()-start_time))
+                if val_acc > best_acc:
+                    if args.save_model_to:
+                        saver.save(sess, args.save_model_to)
+                        log(fh, "\t\tSaved model to %s" % args.save_model_to)
+                    best_acc = val_acc
                 if val_acc <= last_acc:
                     learning_rate *= .5
                     log(fh, "\t\tLearning rate halved to %.3f" % learning_rate)
-                    if val_acc == last_acc:
-                        pdb.set_trace()
-                else:
-                    best_acc = val_acc
-                last_acc = best_acc
+                last_acc = val_acc
 
         log(fh, "Finished training in %.3f s" % (time.time() - initial_time))
 
