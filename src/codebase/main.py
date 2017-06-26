@@ -1,7 +1,9 @@
+import pdb
 import sys
 import h5py
 import argparse
-from models.simple_cnn import Simple_CNN
+from models.simple_cnn import SimpleCNN
+from generators.fast_gradient import FastGradientGenerator
 from utils.dataset import Dataset
 from utils.utils import log as log
 
@@ -15,12 +17,10 @@ def main(arguments):
             formatter_class=argparse.RawDescriptionHelpFormatter)
     
     # General options
-    parser.add_argument("--log_file", help="Path to file to log progress", type=str, default='')
-    parser.add_argument("--im_path", help="Path to h5py? file containing images to obfuscate", type=str, default='')
-    # out_file?
-
-    # Data options
+    parser.add_argument("--log_file", help="Path to file to log progress", type=str)
     parser.add_argument("--data_path", help="Path to hdf5 files containing training data", type=str, default='')
+    parser.add_argument("--im_file", help="Path to h5py? file containing images to obfuscate", type=str, default='')
+    parser.add_argument("--out_file", help="Optional hdf5 filepath to write obfuscated images to", type=str)
 
     # Model options
     parser.add_argument("--model", help="Model architecture to use", type=str, default='simple')
@@ -41,6 +41,11 @@ def main(arguments):
     # SimpleCNN options
     parser.add_argument("--n_modules", help="Number of convolutional modules to stack (shapes must match)", type=int, default=6)
 
+    # Generator options
+    parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
+    parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.3)
+    parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
+
     args = parser.parse_args(arguments)
 
     log_fh = open(args.log_file, 'w')
@@ -58,32 +63,59 @@ def main(arguments):
         raise NotImplementedError
     else:
         if args.model == 'simple':
-            model = Simple_CNN(args)
+            model = SimpleCNN(args)
     log(log_fh, "\tDone!")
 
     log(log_fh, "Training...")
-    tr_data = Dataset(args.data_path+'tr.hdf5', args)
-    val_data = Dataset(args.data_path+'val.hdf5', args)
+    with h5py.File(args.data_path+'tr.hdf5', 'r') as fh:
+        tr_data = Dataset(fh['ins'][:], fh['outs'][:], args)
+    with h5py.File(args.data_path+'val.hdf5', 'r') as fh:
+        val_data = Dataset(fh['ins'][:], fh['outs'][:], args)
     model.train(tr_data, val_data, args, log_fh)
     if args.save_model_to:
         raise NotImplementedError
+    log(log_fh, "\tDone!")
+    _, val_acc = model.validate(val_data)
+    log(log_fh, "Validation accuracy: %.3f" % val_acc)
 
-    '''
     # Load image to obfuscate
-    with h5py.File(args.im_path, 'r') as fh:
-        ims = fh['ims'][:]
-        assert ims.shape[1] == args.im_dim and ims.shape[2] == args.im_dim
-        assert ims.shape[-1] == args.n_channels
+    # TODO: clean up this code to be consistent with Dataset class
+    #   - rework generator signature
+    #   - generator is breaking shit
+    log(log_fh, "Generating noise for images...")
+    with h5py.File(args.im_file, 'r') as fh:
+        test_ins = fh['ins'][:]
+        test_outs = fh['outs'][:]
+        assert test_ins.shape[1] == args.im_size and test_ins.shape[2] == args.im_size
+        assert test_ins.shape[-1] == args.n_channels
+    log(log_fh, "\tLoaded images!")
 
     # Get the noise (either image-specific or universal)
     if args.generator == 'deepfool':
-        generator = deepfool()
+        generator = DeepFool()
     elif args.generator == 'fast_gradient':
-        generator = fast_gradient()
+        generator = FastGradientGenerator(args)
+    log(log_fh, "\tGenerator built!")
+    corrupt_ins, noise = generator.generate(test_ins, test_outs, model)
+    log(log_fh, "\tDone!")
 
-    # Generate adversarial image and save
-    noise = generator.generate(ims, model)
-    '''
+    # Compute the corruption rate
+    log(log_fh, "Computing corruption rate...")
+    clean_data = Dataset(test_ins, test_outs, args)    
+    _, clean_acc = model.validate(clean_data)
+    corrupt_data = Dataset(corrupt_ins, test_outs, args)    
+    _, corrupt_acc = model.validate(corrupt_data)
+    log(log_fh, "\tOriginal accuracy: %.3f, new accuracy: %.3f" % 
+            (clean_acc, corrupt_acc))
+    log(log_fh, "\tDone!")
+
+    # Save noise and images
+    if args.out_file:
+        with h5py.File(args.out_file, 'w') as fh:
+            fh['noise'] = noise
+            fh['ims'] = test_ins
+            fh['noisy_ims'] = corrupt_ins
+        log(log_fh, "Saved images to %s" % args.out_file)
 
     log_fh.close()
 
