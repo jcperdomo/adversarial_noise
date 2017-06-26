@@ -9,9 +9,10 @@ class FastGradientGenerator:
 
     '''
 
-    def __init__(self, args):
+    def __init__(self, args, n_iters):
         self.eps = args.eps
         self.alpha = args.alpha
+        self.n_iters = args.n_iters
 
     def generate(self, ins, outs, model):
         '''
@@ -24,12 +25,13 @@ class FastGradientGenerator:
             - adversaries: n_images x im_size x im_size x n_channels
             - noise: n_ims x im_size x im_size x n_channels
         '''
-        if self.alpha:
-            random_noise = np.random.normal(0, 1, size=ins.shape)
-            ins = ins + self.alpha * random_noise
-            gradients = model.get_gradient(ins, outs)
-            adv_noise = (self.eps - self.alpha) * np.sign(gradients)
-        else:
-            gradients = model.get_gradient(ins, outs) # get gradient of model's loss wrt images
-            adv_noise = self.eps * np.sign(gradients)
+        for _ in self.n_iters:
+            if self.alpha:
+                random_noise = np.random.normal(0, 1, size=ins.shape)
+                ins = ins + self.alpha * random_noise
+                gradients = model.get_gradient(ins, outs)
+                adv_noise = (self.eps - self.alpha) * np.sign(gradients)
+            else:
+                gradients = model.get_gradient(ins, outs) # get gradient of model's loss wrt images
+                adv_noise = self.eps * np.sign(gradients)
         return ins + adv_noise, adv_noise

@@ -29,7 +29,11 @@ def main(arguments):
     parser.add_argument("--init_scale", help="Initialization scale (std around 0)", type=float, default=.1)
 
     # Model logging options
-    parser.add_argument("--load_model_from", help="Path to load model from", type=str, default='')
+    parser.add_argument("--load_model_from", help="Path to load model from. \
+                                                    When loading a model, \
+                                                    this argument must match \
+                                                    the import model type.", 
+                                                    type=str, default='')
     parser.add_argument("--save_model_to", help="Path to save model to", type=str, default='')
 
     # Training options
@@ -45,6 +49,7 @@ def main(arguments):
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
     parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.3)
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
+    parser.add_argument("--n_iters", help="Number of iterations to run generator for (1 for regular FGSM)", type=int, default=1)
 
     args = parser.parse_args(arguments)
 
@@ -59,11 +64,10 @@ def main(arguments):
 
     # Train or load a model
     log(log_fh, "Building model...")
-    if args.load_model_from:
-        raise NotImplementedError
+    if args.model == 'simple':
+        model = SimpleCNN(args)
     else:
-        if args.model == 'simple':
-            model = SimpleCNN(args)
+        raise NotImplementedError
     log(log_fh, "\tDone!")
 
     log(log_fh, "Training...")
@@ -72,8 +76,6 @@ def main(arguments):
     with h5py.File(args.data_path+'val.hdf5', 'r') as fh:
         val_data = Dataset(fh['ins'][:], fh['outs'][:], args)
     model.train(tr_data, val_data, args, log_fh)
-    if args.save_model_to:
-        raise NotImplementedError
     log(log_fh, "\tDone!")
     _, val_acc = model.validate(val_data)
     log(log_fh, "Validation accuracy: %.3f" % val_acc)
