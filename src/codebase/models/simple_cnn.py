@@ -92,8 +92,10 @@ class SimpleCNN:
 
             # Initial stuff
             tf.global_variables_initializer().run()
-            if args.save_model_to:
-                saver = tf.train.Saver()
+            saver = tf.train.Saver()
+            if args.load_model_from:
+                saver.restore(self.session, args.load_model_from)
+                log(fh, '\tLoaded model from %s' % args.load_model_from)
 
             initial_time = time.time()
             val_loss, val_acc = self.validate(val_data)
@@ -129,7 +131,7 @@ class SimpleCNN:
                         (val_loss, val_acc, time.time()-start_time))
                 if val_acc > best_acc:
                     if args.save_model_to:
-                        saver.save(sess, args.save_model_to)
+                        saver.save(self.session, args.save_model_to)
                         log(fh, "\t\tSaved model to %s" % args.save_model_to)
                     best_acc = val_acc
                 if val_acc <= last_acc:
