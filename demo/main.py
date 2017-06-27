@@ -6,28 +6,34 @@ import numpy as np
 import tensorflow as tf
 
 from flask import Flask, render_template, request, redirect, \
-        send_from_directory, flash, url_for
+        send_from_directory, flash, url_for, jsonify
 from werkzeug.utils import secure_filename
 
 from src.codebase.models.simple_cnn import SimpleCNN
 from src.codebase.generators.fast_gradient import FastGradientGenerator
 from src.codebase.utils.utils import log
+from src.codebase.utils.dataset import Dataset
 
-UPLOAD_FOLDER = 'temp/'
-ALLOWED_EXTENSIONS = set(['jpg', 'png'])
+UPLOAD_FOLDER = 'demo/temp/'
+ALLOWED_EXTENSIONS = set(['jpg', 'png', 'hdf5'])
 
 # define web app
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-@app.route('/test')
-def home():
-    return render_template('test.html')
+def prep_data(path):
+    with h5py.File(path, 'r') as fh:
+        data = Dataset(fh['ins'][:], fh['outs'][:], args)
+    return data
 
-# need to be able to upload image
+@app.route('/_obfuscate')
+def obfuscate():
+    pass
 
-# helper function
 def allowed_file(filename):
+    '''
+    Check that file extension is allowed.
+    '''
     return '.' in filename and \
             filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -44,7 +50,20 @@ def upload_file():
         if fh and allowed_file(fh.filename):
             filename = secure_filename(fh.filename)
             fh.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return redirect(url_for('uploaded_file', filename=filename))
+
+            # currently assuming uploaded file is well-formed HDF5
+            data = prep_data(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            clean_acc = model.validate(data)[1]
+            noise = generator.generate(data, model)
+            obf_data = Dataset(data.ins + noise, data.outs, args)
+            obf_acc = model.validate(obf_data)[1]
+            with h5py.File(os.path.join(
+                app.config['UPLOAD_FOLDER'], 'corrupted_' + filename), 'w') as fh:
+                fh['ins'] = data.ins + noise
+                fh['outs'] = data.outs
+
+            return render_template('success.html', clean=clean_acc, obfuscated=obf_acc)
+            #return redirect(url_for('uploaded_file', filename=filename))
     return render_template('upload.html')
 
 @app.route('/uploads/<filename>')

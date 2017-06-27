@@ -33,8 +33,9 @@ class FastGradientGenerator:
                 random_noise = np.random.normal(0, 1, size=ins.shape)
                 ins = ins + self.alpha * random_noise
                 gradients = model.get_gradient(ins, outs)
-                adv_noise = (self.eps - self.alpha) * np.sign(gradients)
+                adv_noise = self.alpha * random_noise + \
+                    (self.eps - self.alpha) * np.sign(gradients)
             else:
-                gradients = model.get_gradient(ins, outs) # get gradient of model's loss wrt images
+                gradients = model.get_gradient(ins, outs)
                 adv_noise = self.eps * np.sign(gradients)
-        return ins + adv_noise, adv_noise
+        return adv_noise

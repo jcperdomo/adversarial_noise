@@ -72,12 +72,7 @@ class SimpleCNN:
 
     def train(self, tr_data, val_data, args, fh):
         '''
-        Train the model using data
-
-        TODO
-            - training options: n_epochs, halving learning rate, etc.
-            - logging
-            - model saving
+        Train the model
         '''
 
         with self.graph.as_default(), self.session.as_default():
