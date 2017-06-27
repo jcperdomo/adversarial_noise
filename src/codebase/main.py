@@ -4,8 +4,8 @@ import h5py
 import argparse
 from models.simple_cnn import SimpleCNN
 from generators.fast_gradient import FastGradientGenerator
-from utils.dataset import Dataset
-from utils.utils import log as log
+from src.codebase.utils.dataset import Dataset
+from src.codebase.utils.utils import log as log
 
 def main(arguments):
     '''

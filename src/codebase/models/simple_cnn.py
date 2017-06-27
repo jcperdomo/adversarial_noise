@@ -2,7 +2,7 @@ import pdb
 import time
 import numpy as np
 import tensorflow as tf
-from utils.utils import log as log
+from src.codebase.utils.utils import log as log
 
 class SimpleCNN:
     '''
