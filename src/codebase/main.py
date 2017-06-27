@@ -62,13 +62,17 @@ def main(arguments):
         args.n_channels = f['n_channels'][0]
     log(log_fh, "Processing %d types of images of size %d and %d channels" % (args.n_classes, args.im_size, args.n_channels))
 
-    # Train or load a model
+    # Build the model
     log(log_fh, "Building model...")
     if args.model == 'simple':
         model = SimpleCNN(args)
     else:
         raise NotImplementedError
     log(log_fh, "\tDone!")
+
+    if args.load_model_from:
+        model.load_weights(args.load_model_from)
+        log(log_fh, 'Loaded model from %s' % args.load_model_from)
 
     log(log_fh, "Training...")
     with h5py.File(args.data_path+'tr.hdf5', 'r') as fh:

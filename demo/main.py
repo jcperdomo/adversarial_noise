@@ -57,7 +57,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description=__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter)
-    
+
     # General options
     parser.add_argument("--log_file", help="Path to file to log progress", type=str)
     parser.add_argument("--data_path", help="Path to hdf5 files containing training data", type=str, default='')
@@ -71,7 +71,11 @@ if __name__ == '__main__':
     parser.add_argument("--init_scale", help="Initialization scale (std around 0)", type=float, default=.1)
 
     # Model logging options
-    parser.add_argument("--load_model_from", help="Path to load model from", type=str, default='')
+    parser.add_argument("--load_model_from", help="Path to load model from. \
+                                                    When loading a model, \
+                                                    this argument must match \
+                                                    the import model type.", 
+                                                    type=str, default='')
     parser.add_argument("--save_model_to", help="Path to save model to", type=str, default='')
 
     # Training options
@@ -87,6 +91,7 @@ if __name__ == '__main__':
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
     parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.3)
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
+    parser.add_argument("--n_iters", help="Number of iterations to run generator for (1 for regular FGSM)", type=int, default=1)
 
     args = parser.parse_args(sys.argv[1:])
 
@@ -99,8 +104,7 @@ if __name__ == '__main__':
 
     generator = FastGradientGenerator(args)
     model = SimpleCNN(args)
-    saver = tf.train.Saver()
-    saver.restore(model.session, args.load_model_from)
+    model.load_weights(args.load_model_from)
     print('Loaded model from %s' % args.load_model_from)
 
     app.run()
