@@ -1,5 +1,6 @@
 import pdb
 import numpy as np
+from src.codebase.utils.dataset import Dataset
 
 class FastGradientGenerator:
     '''
@@ -25,8 +26,15 @@ class FastGradientGenerator:
             - adversaries: n_images x im_size x im_size x n_channels
             - noise: n_ims x im_size x im_size x n_channels
         '''
-        ins = data.ins
-        outs = data.outs
+
+        if type(data) is tuple:
+            ins = data[0]
+            outs = data[1]
+        elif type(data) is Dataset:
+            ins = data.ins
+            outs = data.outs
+        else:
+            raise NotImplementedError("Invalid data format")
 
         for _ in xrange(self.n_iters):
             if self.alpha:
