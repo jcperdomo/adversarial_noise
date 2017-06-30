@@ -54,7 +54,8 @@ class SimpleCNN:
             weight = tf.Variable(weight_init, name='fc_weight')
             bias = tf.Variable(bias_init, name='fc_bias')
             self.weights += [weight, bias]
-            logits = tf.matmul(tf.squeeze(curr_layer), weight) #+ bias
+            #logits = tf.matmul(tf.squeeze(curr_layer), weight) #+ bias
+            logits = tf.matmul(tf.reshape(curr_layer, [None, args.n_kernels]), weight) + bias
 
             # Loss and gradients
             self.loss = tf.reduce_mean(
@@ -153,12 +154,12 @@ class SimpleCNN:
                 n_ins += inputs.shape[0]
         return total_loss/data.n_batches, 100.* total_correct/n_ins
 
-    def get_predictions(self, inputs):
+    def predict(self, inputs):
         '''
         Return class probability distributions for inputs
         '''
         with self.graph.as_default(), self.session.as_default():
-            f_dict = {self.input_ph:inputs}
+            f_dict = {self.input_ph:inputs, self.phase_ph:False}
             preds = self.session.run([self.predictions], feed_dict=f_dict)
         return preds
 

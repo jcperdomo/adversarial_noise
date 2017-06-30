@@ -65,9 +65,9 @@ def obfuscate():
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
-    input_f = request.json
-    input_im = imread(input_f)
-    preds = model.predict(input_im)
+    pdb.set_trace()
+    im = np.array(request.json).reshape((1,32,32,3))
+    preds = model.predict(im)
     return jsonify(preds=preds)
 
 if __name__ == '__main__':
@@ -120,8 +120,8 @@ if __name__ == '__main__':
         args.n_channels = f['n_channels'][0]
 
     generator = FastGradientGenerator(args)
-    #model = SimpleCNN(args)
-    #model.load_weights(args.load_model_from)
-    #print('Loaded model from %s' % args.load_model_from)
+    model = SimpleCNN(args)
+    model.load_weights(args.load_model_from)
+    print('Loaded model from %s' % args.load_model_from)
 
     app.run()

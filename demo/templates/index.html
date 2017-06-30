@@ -1,0 +1,142 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <title>Ill Noise Demo</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css')}}">
+        <script type="text/javascript" src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+        <script type="text/javascript" src="{{ url_for('static', filename='js/main.js') }}"></script>
+    </head>
+
+    <body>
+        <div class="container">
+            <h1>Ill Noise</h1>
+            <div class="row">
+                <div class="col-md-6">
+                    <form enctype='multipart/form-data' method='POST' name='fileinfo'>
+                        <label>Upload an image here!</label>
+                        <input type='file' name='file' id='upload_im'/>
+                    </form>
+                    <input type="button" id='upload_btn' value="Upload"></input>
+                </div>
+
+                <div class="col-md-6">
+                    <p><button id="obfuscate" class="btn btn-default">Obfuscate</button></p>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <p>Original image</p>
+                    <img src="" alt="placeholder image" width="32" height="32" id='orig_im'>
+                </div>
+
+                <div class="col-md-6">
+                    <p>Obfuscated image</p>
+                    <img src="" alt="placeholder image" width="32" height="32" id='obf_im'>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <p>Original model predictions</p>
+                    <table id="clean_preds" class="table">
+                        <tr>
+                            <th class="col-md-1"></th>
+                            <th class="col-md-2">Probability</th>
+                        </tr>
+                        <tr>
+                            <th>Class 0</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 1</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 2</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 3</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 4</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 5</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 6</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 7</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 8</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 9</th>
+                            <td></td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="col-md-6">
+                    <p>Obfuscated model predictions</p>
+                    <table id="obf_preds" class="table">
+                        <tr>
+                            <th class="col-md-1"></th>
+                            <th class="col-md-2">Probability</th>
+                        </tr>
+                        <tr>
+                            <th>Class 0</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 1</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 2</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 3</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 4</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 5</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 6</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 7</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 8</th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Class 9</th>
+                            <td></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
