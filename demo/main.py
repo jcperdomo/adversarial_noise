@@ -69,10 +69,10 @@ def obfuscate():
     im = np.array(request.json).reshape((1,32,32,3))
     noise = generator.generate((im, np.array([true_class])), model)
     preds = model.predict(im+noise)
-    enc_noise = encode_arr(noise)
+    enc_noise = encode_arr(noise / (2*generator.eps) + .5)
     enc_im = encode_arr(im+noise)
     return jsonify(preds=preds[0].tolist(),
-        noise_src='data:image/png;base64'+enc_noise,
+        noise_src='data:image/png;base64,'+enc_noise,
         obf_src='data:image/png;base64,'+enc_im)
 
 @app.route('/api/predict', methods=['POST'])

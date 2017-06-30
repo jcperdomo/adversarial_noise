@@ -60,6 +60,11 @@ $(function() {
                 }
             }
         });
+        for (var j = 0; j < 10; j++) {
+            $('#preds tr').eq(j + 1).find('td').eq(1).text('');
+        }
+        $('#obf_im').attr('src', '');
+        $('#noise_im').attr('src', '');
     });
 
     $('#obfuscate').on('click', function() {
@@ -82,6 +87,7 @@ $(function() {
             success: function(data) {
 
                 $('#obf_im').attr('src', data.obf_src);
+                $('#noise_im').attr('src', data.noise_src);
 
                 var max = 0;
                 var max_idx = 0;
