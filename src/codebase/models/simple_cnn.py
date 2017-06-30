@@ -55,7 +55,7 @@ class SimpleCNN:
             bias = tf.Variable(bias_init, name='fc_bias')
             self.weights += [weight, bias]
             #logits = tf.matmul(tf.squeeze(curr_layer), weight) #+ bias
-            logits = tf.matmul(tf.reshape(curr_layer, [None, args.n_kernels]), weight) + bias
+            logits = tf.matmul(tf.reshape(curr_layer, [-1, args.n_kernels]), weight) + bias
 
             # Loss and gradients
             self.loss = tf.reduce_mean(

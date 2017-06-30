@@ -3,12 +3,13 @@ import sys
 import pdb
 import h5py
 import argparse
+import StringIO
 import numpy as np
 import tensorflow as tf
 from scipy.misc import imread, imsave
 
 from flask import Flask, render_template, request, redirect, \
-        send_from_directory, flash, url_for, jsonify
+        send_from_directory, flash, url_for, jsonify, send_file
 from werkzeug.utils import secure_filename
 
 from src.codebase.models.simple_cnn import SimpleCNN
@@ -25,12 +26,20 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SECRET_KEY'] = 'test'
 
+# globals for hacky / lazy stuff
+true_class = -1
+
 def allowed_file(filename):
     '''
     Check that file extension is allowed.
     '''
     return '.' in filename and \
         filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def encode_arr(arr):
+    fh = StringIO.StringIO()
+    imsave(fh, np.squeeze(arr), format='png')
+    return fh.getvalue().encode('base64')
 
 @app.route('/uploads/<filename>', methods=['GET'])
 def uploaded_file(filename):
@@ -54,21 +63,25 @@ def upload():
 @app.route('/api/obfuscate', methods=['POST'])
 def obfuscate():
     ''' 
-    I hope this returns a URL to the newly generated image to display
+    TODO: want to actually send the corrupted image do display
     '''
-    input_f = request.json
-    input_im = imread(input_f)
-    noise = generator.generate((input_im, 0), model)
-    obf_f = 'obf_' + input_f
-    imsave(obf_f, noise + input_im)
-    return jsonify(im_path=obf_f)
+    global true_class
+    im = np.array(request.json).reshape((1,32,32,3))
+    noise = generator.generate((im, np.array([true_class])), model)
+    preds = model.predict(im+noise)
+    enc_noise = encode_arr(noise)
+    enc_im = encode_arr(im+noise)
+    return jsonify(preds=preds[0].tolist(),
+        noise_src='data:image/png;base64'+enc_noise,
+        obf_src='data:image/png;base64,'+enc_im)
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
-    pdb.set_trace()
+    global true_class
     im = np.array(request.json).reshape((1,32,32,3))
     preds = model.predict(im)
-    return jsonify(preds=preds)
+    true_class=  np.argmax(preds[0])
+    return jsonify(preds=preds[0].tolist())
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
