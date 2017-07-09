@@ -18,6 +18,7 @@ from src.codebase.utils.utils import log
 from src.codebase.utils.dataset import Dataset
 
 # contants
+VERSION = 'v0.1'
 UPLOAD_FOLDER = 'demo/tmp/'
 ALLOWED_EXTENSIONS = set(['jpg', 'png', 'hdf5'])
 

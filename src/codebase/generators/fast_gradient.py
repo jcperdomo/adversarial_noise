@@ -8,14 +8,18 @@ class FastGradientGenerator:
     Also allows for random initialization of the noise, which was shown to
         improve performance (Tramer et al., 2017)
 
+    TODO
+        - super generator class
+        - iterated FGM
+        - random FGM
+
     '''
 
     def __init__(self, args):
         self.eps = args.eps
         self.alpha = args.alpha
-        self.n_iters = args.n_iters
 
-    def generate(self, data, model):
+    def generate(self, data, model, args, fh):
         '''
         Generate adversarial noise using fast gradient method.
 
@@ -36,12 +40,13 @@ class FastGradientGenerator:
         else:
             raise NotImplementedError("Invalid data format")
 
-        for _ in xrange(self.n_iters):
+        for _ in xrange(self.n_generator_steps):
             if self.alpha:
-                random_noise = np.random.normal(0, 1, size=ins.shape)
-                ins = ins + self.alpha * random_noise
+                random_noise = self.alpha * np.sign(random_noise) + \
+                        np.random.normal(0, 1, size=ins.shape)
+                ins = ins + random_noise
                 gradients = model.get_gradient(ins, outs)
-                adv_noise = self.alpha * random_noise + \
+                adv_noise = random_noise + \
                     (self.eps - self.alpha) * np.sign(gradients)
             else:
                 gradients = model.get_gradient(ins, outs)
