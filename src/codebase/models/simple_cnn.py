@@ -14,7 +14,6 @@ class SimpleCNN:
         - batch normalization
         - other nonlinearities
         - consistent naming convenations
-        - reuse tf.Session()?
     '''
 
     def __init__(self, args):
@@ -54,8 +53,8 @@ class SimpleCNN:
             weight = tf.Variable(weight_init, name='fc_weight')
             bias = tf.Variable(bias_init, name='fc_bias')
             self.weights += [weight, bias]
-            #logits = tf.matmul(tf.squeeze(curr_layer), weight) #+ bias
-            logits = tf.matmul(tf.reshape(curr_layer, [-1, args.n_kernels]), weight) + bias
+            self.logits = logits = \
+                tf.matmul(tf.reshape(curr_layer, [-1, args.n_kernels]), weight) + bias
 
             # Loss and gradients
             self.loss = tf.reduce_mean(
@@ -66,10 +65,6 @@ class SimpleCNN:
             self.session = tf.Session(graph=self.graph)
             with self.session.as_default():
                 self.saver = tf.train.Saver()
-
-    def load_weights(self, path):
-        with self.session.as_default():
-            self.saver.restore(self.session, path)
 
     def train(self, tr_data, val_data, args, fh):
         '''
@@ -94,6 +89,11 @@ class SimpleCNN:
 
             # Initial stuff
             tf.global_variables_initializer().run()
+
+            if args.load_model_from:
+                self.saver.restore(self.session, args.load_model_from)
+                log(fh, '\tLoaded model from %s' % args.load_model_from)
+
             initial_time = time.time()
             val_loss, val_acc = self.validate(val_data)
             best_loss, best_acc = val_loss, val_acc
@@ -136,6 +136,8 @@ class SimpleCNN:
                     log(fh, "\t\tLearning rate halved to %.3f" % learning_rate)
                 last_acc = val_acc
         log(fh, "\tFinished training in %.3f s" % (time.time() - initial_time))
+        if args.save_model_to: # could throw an error if 0 epochs
+            self.saver.restore(self.session, args.save_model_to)
 
     def validate(self, data):
         with self.graph.as_default(), self.session.as_default():

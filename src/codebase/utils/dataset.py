@@ -1,4 +1,5 @@
 import pdb
+import math
 
 class Dataset:
     '''
@@ -19,7 +20,7 @@ class Dataset:
         self.outs = outs
         self.n_ins = ins.shape[0]
         self.batch_size = args.batch_size
-        self.n_batches = ins.shape[0] / args.batch_size
+        self.n_batches = int(math.ceil(1.0 * ins.shape[0] / args.batch_size))
 
     def __getitem__(self, idx):
         batch_size = self.batch_size

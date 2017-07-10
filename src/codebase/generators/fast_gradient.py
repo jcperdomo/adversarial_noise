@@ -31,19 +31,19 @@ class FastGradientGenerator:
             - noise: n_ims x im_size x im_size x n_channels
         '''
 
-        if type(data) is tuple:
+        if isinstance(data, tuple):
             ins = data[0]
             outs = data[1]
-        elif type(data) is Dataset:
+        elif isinstance(data, Dataset):
             ins = data.ins
             outs = data.outs
         else:
             raise NotImplementedError("Invalid data format")
 
-        for _ in xrange(self.n_generator_steps):
+        for _ in xrange(args.n_generator_steps):
             if self.alpha:
-                random_noise = self.alpha * np.sign(random_noise) + \
-                        np.random.normal(0, 1, size=ins.shape)
+                random_noise = self.alpha * \
+                        np.sign(np.random.normal(0, 1, size=ins.shape))
                 ins = ins + random_noise
                 gradients = model.get_gradient(ins, outs)
                 adv_noise = random_noise + \
