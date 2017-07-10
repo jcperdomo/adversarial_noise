@@ -2,8 +2,9 @@ import pdb
 import sys
 import h5py
 import argparse
-from models.simple_cnn import SimpleCNN
-from generators.fast_gradient import FastGradientGenerator
+from src.codebase.models.simple_cnn import SimpleCNN
+from src.codebase.generators.fast_gradient import FastGradientGenerator
+from src.codebase.generators.carlini_l2 import CarliniL2Generator
 from src.codebase.utils.dataset import Dataset
 from src.codebase.utils.utils import log as log
 
