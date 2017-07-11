@@ -1,13 +1,17 @@
+import os
 import pdb
 import sys
 import h5py
 import argparse
+import numpy as np
 from scipy.misc import imsave
 from src.codebase.models.simple_cnn import SimpleCNN
 from src.codebase.generators.fast_gradient import FastGradientGenerator
 from src.codebase.generators.carlini_l2 import CarliniL2Generator
 from src.codebase.utils.dataset import Dataset
 from src.codebase.utils.utils import log as log
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 def main(arguments):
     '''
@@ -79,9 +83,9 @@ def main(arguments):
     with h5py.File(args.data_path+'val.hdf5', 'r') as fh:
         val_data = Dataset(fh['ins'][:], fh['outs'][:], args)
     model.train(tr_data, val_data, args, log_fh)
-    log(log_fh, "\tDone!")
     _, val_acc = model.validate(val_data)
-    log(log_fh, "Validation accuracy: %.3f" % val_acc)
+    log(log_fh, "\tValidation accuracy: %.3f" % val_acc)
+    log(log_fh, "Done!")
 
     if args.im_file:
         # Load images to obfuscate
@@ -89,6 +93,7 @@ def main(arguments):
         with h5py.File(args.im_file, 'r') as fh:
             te_data = Dataset(fh['ins'][:], fh['outs'][:], args)
         log(log_fh, "\tLoaded images!")
+        _, clean_acc_old = model.validate(te_data)
 
         # Generate the noise
         if args.generator == 'deepfool':
@@ -100,7 +105,9 @@ def main(arguments):
         else:
             raise NotImplementedError
         log(log_fh, "\tGenerator built!")
-        noise = generator.generate(te_data, model, args, log_fh)
+        targeted_data = Dataset(te_data.ins, np.random.randint(args.n_classes,size=10), args)
+        noise = generator.generate(targeted_data, model, args, log_fh)
+        #noise = generator.generate(te_data, model, args, log_fh)
 
         # Compute the corruption rate
         log(log_fh, "\tComputing corruption rate...")
@@ -108,7 +115,8 @@ def main(arguments):
         corrupt_ins = te_data.ins + noise
         corrupt_data = Dataset(corrupt_ins, te_data.outs, args)    
         _, corrupt_acc = model.validate(corrupt_data)
-        log(log_fh, "\t\tOriginal accuracy: %.3f, new accuracy: %.3f" % 
+        assert clean_acc == clean_acc_old
+        log(log_fh, "\tOriginal accuracy: %.3f, new accuracy: %.3f" % 
                 (clean_acc, corrupt_acc))
 
         # Save noise and images

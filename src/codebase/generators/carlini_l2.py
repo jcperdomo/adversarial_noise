@@ -20,21 +20,24 @@ class CarliniL2Generator(): # TODO superclass
         self.lr = args.generator_learning_rate
 
         with model.graph.as_default(), model.session.as_default():
+            model_vars = [var.name for var in tf.global_variables()]
+
             # placeholders
-            self.ins_ph = ins_ph = model.input_ph 
+            self.ins_ph = ins_ph = tf.placeholder(tf.float32, shape=[None, args.im_size, args.im_size, args.n_channels]) #model.input_ph 
             self.outs_ph = outs_ph = \
                     tf.placeholder(tf.float32, shape=[None, args.n_classes])
             self.lr_ph = lr_ph = tf.placeholder(tf.float32, shape=[])
-            self.ws = tf.Variable(np.zeros((n_ins, args.im_size, args.im_size, args.n_channels), dtype=np.float32))
+            self.logits_ph = logits_ph = \
+                    tf.placeholder(tf.float32, shape=[None, args.n_classes])
+            self.ws = tf.Variable(np.zeros((n_ins, args.im_size, args.im_size, args.n_channels), dtype=np.float32), name='generator_ws')
 
             # stuff we care about
             self.obf_im = tf.scalar_mul(.5, tf.tanh(self.ws) + 1)
             self.noise = self.obf_im - ins_ph
 
-            # objective function
-            logits = model.logits # v borrowed from Carlini
-            label_score = tf.reduce_sum(outs_ph * logits) 
-            second_score = tf.reduce_max((1. - outs_ph) * logits)
+            # objective function; below is from Carlini
+            label_score = tf.reduce_sum(outs_ph * logits_ph) 
+            second_score = tf.reduce_max((1. - outs_ph) * logits_ph)
             class_score = tf.maximum(second_score - label_score, -self.k)
 
             self.objective = tf.reduce_sum(tf.square(self.noise)) + \
@@ -49,6 +52,12 @@ class CarliniL2Generator(): # TODO superclass
                 self.optimizer = tf.train.AdagradOptimizer(lr_ph, name='optimizer').minimize(self.objective)
             else:
                 raise NotImplementedError
+
+            generator_vars = [var for var in tf.global_variables() \
+                    if var.name not in model_vars]
+            self.vars = generator_vars
+
+        return
 
     def generate(self, data, model, args, fh):
         '''
@@ -77,19 +86,23 @@ class CarliniL2Generator(): # TODO superclass
         one_hot_outs[np.arange(outs.shape[0]), outs.astype(int)] = 1
 
         with model.graph.as_default(), model.session.as_default():
-            global_vars = tf.global_variables()
-            is_initialized = model.session.run([tf.is_variable_initialized(var) for var in global_vars])
-            uninitialized = [v for (v, f) in zip(global_vars, is_initialized) if not f]
-            tf.variables_initializer(uninitialized).run()
+            # Get logits for test images
+            f_dict = {model.input_ph:ins, model.phase_ph:False}
+            logits = model.session.run(model.logits, feed_dict=f_dict)
+
+            # initialize only the variables that haven't been initialized yet
+            # to avoid resetting the trained model
+            tf.variables_initializer(self.vars).run()
 
             for i in xrange(args.n_generator_steps):
                 f_dict = {self.ins_ph:ins, self.outs_ph:one_hot_outs, 
-                        self.lr_ph:self.lr, model.phase_ph:True}
+                        self.logits_ph:logits, self.lr_ph:self.lr, 
+                        model.phase_ph:False}
                 _, obj_val, noise = model.session.run(
                         [self.optimizer, self.objective, self.noise], 
                         feed_dict=f_dict)
-                if not (i % 10) and i:
-                    log(fh, '\tStep %d: objective: %.3f, avg noise magnitude: %.3f' %
+                if not (i % 100) and i:
+                    log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f' %
                             (i, obj_val, np.mean(noise)))
 
         return noise

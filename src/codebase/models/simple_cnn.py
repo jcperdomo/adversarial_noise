@@ -17,6 +17,7 @@ class SimpleCNN:
     '''
 
     def __init__(self, args):
+
         # Build computation graph
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -65,6 +66,8 @@ class SimpleCNN:
             self.session = tf.Session(graph=self.graph)
             with self.session.as_default():
                 self.saver = tf.train.Saver()
+
+            self.vars = tf.global_variables()
 
     def train(self, tr_data, val_data, args, fh):
         '''
@@ -138,6 +141,7 @@ class SimpleCNN:
         log(fh, "\tFinished training in %.3f s" % (time.time() - initial_time))
         if args.save_model_to: # could throw an error if 0 epochs
             self.saver.restore(self.session, args.save_model_to)
+        self.vars = tf.global_variables() # assuming model is always constructed before generator
 
     def validate(self, data):
         with self.graph.as_default(), self.session.as_default():
