@@ -49,6 +49,7 @@ def main(arguments):
     parser.add_argument("--n_modules", help="Number of convolutional modules to stack (shapes must match)", type=int, default=6)
 
     # Generator options
+    parser.add_argument("--generate", help="1 if should build generator and obfuscate images", type=int, default=1)
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
     parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
     parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.1)
@@ -87,7 +88,9 @@ def main(arguments):
     log(log_fh, "\tValidation accuracy: %.3f" % val_acc)
     log(log_fh, "Done!")
 
-    if args.im_file:
+    if args.generate:
+        assert args.im_file
+
         # Load images to obfuscate
         log(log_fh, "Generating noise for images...")
         with h5py.File(args.im_file, 'r') as fh:
