@@ -69,6 +69,12 @@ class SimpleCNN:
 
             self.vars = tf.global_variables()
 
+    def load_weights(self, path):
+        with self.graph.as_default(), self.session.as_default():
+            self.saver.restore(self.session, path)
+        return
+
+
     def train(self, tr_data, val_data, args, fh):
         '''
         Train the model

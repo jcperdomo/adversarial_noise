@@ -11,8 +11,6 @@ from src.codebase.generators.carlini_l2 import CarliniL2Generator
 from src.codebase.utils.dataset import Dataset
 from src.codebase.utils.utils import log as log
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-
 def main(arguments):
     '''
     Main logic

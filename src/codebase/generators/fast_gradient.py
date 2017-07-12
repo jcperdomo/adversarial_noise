@@ -19,7 +19,7 @@ class FastGradientGenerator:
         self.eps = args.eps
         self.alpha = args.alpha
 
-    def generate(self, data, model, args, fh):
+    def generate(self, data, model, args, fh=None):
         '''
         Generate adversarial noise using fast gradient method.
 
