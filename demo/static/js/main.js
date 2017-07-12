@@ -35,7 +35,7 @@ $(function() {
         }
         $.ajax({
             // predict class for image
-            url: '/api/predict',
+            url: '/illnois/api/v0.1/predict',
             method: 'POST',
             contentType: 'application/json',
             data: JSON.stringify(inputs),
@@ -80,7 +80,7 @@ $(function() {
         }
         $.ajax({
             // predict class for image
-            url: '/api/obfuscate',
+            url: '/illnois/api/v0.1/obfuscate',
             method: 'POST',
             contentType: 'application/json',
             data: JSON.stringify(inputs),

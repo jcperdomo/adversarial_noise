@@ -18,6 +18,7 @@ class SimpleCNN:
     '''
 
     def __init__(self, args):
+
         # Build computation graph
         self.graph = tf.Graph()
         with self.graph.as_default():

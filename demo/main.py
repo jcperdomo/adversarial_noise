@@ -17,56 +17,34 @@ from src.codebase.generators.fast_gradient import FastGradientGenerator
 from src.codebase.utils.utils import log
 from src.codebase.utils.dataset import Dataset
 
-# contants
+# constants
+API_NAME = 'illnois'
 VERSION = 'v0.1'
-UPLOAD_FOLDER = 'demo/tmp/'
-ALLOWED_EXTENSIONS = set(['jpg', 'png', 'hdf5'])
 
 # web app
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SECRET_KEY'] = 'test'
 
 # globals for hacky / lazy stuff
 true_class = -1
-
-def allowed_file(filename):
-    '''
-    Check that file extension is allowed.
-    '''
-    return '.' in filename and \
-        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def encode_arr(arr):
     fh = StringIO.StringIO()
     imsave(fh, np.squeeze(arr), format='png')
     return fh.getvalue().encode('base64')
 
-@app.route('/uploads/<filename>', methods=['GET'])
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/api/upload', methods=['GET', 'POST'])
-def upload():
-    if request.method == 'POST':
-        files = request.files['file']
+###################
+### API METHODS ###
+###################
+# Long term, probably not sustainable to send the entire image over the server
 
-        if files and allowed_file(files.filename):
-            filename = secure_filename(files.filename)
-            files.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return jsonify(im_path=url_for('uploaded_file', filename=filename))
-    return redirect(url_of('index'))
-
-@app.route('/api/obfuscate', methods=['POST'])
+@app.route('%s/api/%s/obfuscate' % (API_NAME, VERSION), methods=['POST'])
 def obfuscate():
-    ''' 
-    TODO: want to actually send the corrupted image do display
-    '''
-    global true_class
+    #global true_class
     im = np.array(request.json).reshape((1,32,32,3))
     noise = generator.generate((im, np.array([true_class])), model)
     preds = model.predict(im+noise)
@@ -76,7 +54,7 @@ def obfuscate():
         noise_src='data:image/png;base64,'+enc_noise,
         obf_src='data:image/png;base64,'+enc_im)
 
-@app.route('/api/predict', methods=['POST'])
+@app.route('%s/api/%s/predict' % (API_NAME, VERSION), methods=['POST'])
 def predict():
     global true_class
     im = np.array(request.json).reshape((1,32,32,3))
