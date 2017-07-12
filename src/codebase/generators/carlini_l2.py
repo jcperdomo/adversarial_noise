@@ -14,41 +14,53 @@ class CarliniL2Generator(): # TODO superclass
         - multiple starting point gradient descent
     '''
 
-    def __init__(self, args, model):
+    def __init__(self, args, model, n_ins):
         self.c = args.generator_opt_const
         self.k = -args.generator_confidence
         self.lr = args.generator_learning_rate
 
-        with model.graph.as_default(), model.sess.as_default():
+        with model.graph.as_default(), model.session.as_default():
+            model_vars = [var.name for var in tf.global_variables()]
+
             # placeholders
-            self.ws_ph = tf.placeholder(tf.float32, shape=[None, args.im_size, args.im_size, args.n_channels])
-            self.ins_ph = model.input_ph #tf.placeholder(tf.float32, shape=shape)
-            self.outs_ph = tf.placeholder(tf.float32, shape=[None, args.n_classes])
+            self.ins_ph = ins_ph = model.input_ph
+            self.outs_ph = outs_ph = \
+                    tf.placeholder(tf.float32, shape=[None, args.n_classes])
             self.lr_ph = lr_ph = tf.placeholder(tf.float32, shape=[])
-            # TODO: sometimes outs_ph is a TARGET class
+            self.ws = tf.Variable(np.zeros((n_ins, args.im_size, args.im_size, args.n_channels), dtype=np.float32), name='generator_ws')
 
-            # targets
-            self.obf_im = tf.scalar_mul(.5, tf.tanh(ws_ph) + 1)
-            self.noise = self.obf_im -  self.im_ph
+            # stuff we care about
+            self.obf_im = tf.scalar_mul(.5, tf.tanh(self.ws) + 1)
+            self.noise = self.obf_im - ins_ph
 
-            # objective function
-            logits = model.logits
-            label_score = tf.reduce_sum(self.outs_ph * logits) # borrowed from C
-            second_score = tf.reduce_max((1. - self.outs_ph) * logits)
-            class_score = tf.maximum(second_score - label_score, -self.k)
+            # objective function; below is from Carlini
+            logits = model.get_logits(self.obf_im)
+            true_logit = tf.reduce_sum(outs_ph * logits) 
+            second_logit = tf.reduce_max((1. - outs_ph) * logits)
+
+            #true_logit = tf.reduce_sum(outs_ph * logits_ph) 
+            #second_logit = tf.reduce_max((1. - outs_ph) * logits_ph)
+            class_score = tf.maximum(true_logit - second_logit + self.k, 0.0)
+            #class_score = tf.maximum(second_score - label_score + self.k, 0.0)
 
             self.objective = tf.reduce_sum(tf.square(self.noise)) + \
                     tf.scalar_mul(self.c, class_score)
 
             # optimizer
             if args.generator_optimizer == 'sgd':
-                self.optimizer = tf.train.GradientDescentOptimizer(lr_ph).minimize(self.objective)
+                self.optimizer = tf.train.GradientDescentOptimizer(lr_ph, name='optimizer').minimize(self.objective, var_list=[self.ws])
             elif args.generator_optimizer == 'adam':
-                self.optimizer = tf.train.AdamOptimizer(learning_rate=lr_ph).minimize(self.objective)
+                self.optimizer = tf.train.AdamOptimizer(learning_rate=lr_ph, name='optimizer').minimize(self.objective, var_list=[self.ws])
             elif args.generator_optimizer == 'adagrad':
-                self.optimizer = tf.train.AdagradOptimizer(lr_ph).minimize(self.objective)
+                self.optimizer = tf.train.AdagradOptimizer(lr_ph, name='optimizer').minimize(self.objective, var_list=[self.ws])
             else:
                 raise NotImplementedError
+
+            generator_vars = [var for var in tf.global_variables() \
+                    if var.name not in model_vars]
+            self.vars = generator_vars
+
+        return
 
     def generate(self, data, model, args, fh):
         '''
@@ -63,33 +75,39 @@ class CarliniL2Generator(): # TODO superclass
             - noise: n_ims x im_size x im_size x n_channels
         '''
 
-        if type(data) is tuple:
+        if isinstance(data, tuple):
             ins = data[0]
             outs = data[1]
-        elif type(data) is Dataset:
+        elif isinstance(data, Dataset):
             ins = data.ins
             outs = data.outs
         else:
             raise TypeError("Invalid data format")
 
         # make outs one-hot
-        one_hot_outs = np.zeroes((outs.shape[0], args.n_classes))
-        one_hot_outs[np.arange(outs.shape[0]), outs] = 1
+        one_hot_outs = np.zeros((outs.shape[0], args.n_classes))
+        one_hot_outs[np.arange(outs.shape[0]), outs.astype(int)] = 1
 
-        with model.graph.as_default(), model.sess.as_default():
-            # initialize w
-            ws = tf.Variable(np.zeros(ins.shape[0], args.im_size, args.im_size, args.n_channels))
-            tf.global_variables_initializer().run()
+        with model.graph.as_default(), model.session.as_default():
+            # initialize only the variables that haven't been initialized yet
+            tf.variables_initializer(self.vars).run()
 
             for i in xrange(args.n_generator_steps):
-                f_dict = {self.ws_ph: ws, self.ins_ph:ins, 
-                        self.out_ph:one_hot_outs, self.lr_ph: self.lr, 
-                        model.phase_ph:True}
-                _, obj_val, noise = self.session.run(
+                # Get logits for current ims+noise
+                '''
+                noise = model.session.run(self.noise, 
+                        feed_dict={self.ins_ph:ins})
+                f_dict = {model.input_ph:ins + noise, model.phase_ph:False}
+                logits = model.session.run(model.logits, feed_dict=f_dict)
+                '''
+
+                f_dict = {self.ins_ph:ins, self.outs_ph:one_hot_outs, 
+                        self.lr_ph:self.lr, model.phase_ph:False}
+                _, obj_val, noise = model.session.run(
                         [self.optimizer, self.objective, self.noise], 
                         feed_dict=f_dict)
-                if not (i % 10) and i:
-                    log(fh, '\tStep %d: objective: %.3f, avg noise magnitude: %.3f' %
-                            (i+1, obj_val, np.mean(noise)))
+                if not (i % (args.n_generator_steps / 10.)) and i:
+                    log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f' %
+                            (i, obj_val, np.mean(noise)))
 
         return noise

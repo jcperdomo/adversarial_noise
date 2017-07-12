@@ -1,21 +1,30 @@
 #!/bin/bash
+#
+#SBATCH -t 1-00:00
+#SBATCH -p holyseasgpu
+#SBATCH --gres=gpu:1
+#SBATCH --mem=8000
+#SBATCH -o src/logs/sbatch.out
+#SBATCH -e src/logs/sbatch.err
+#SBATCH --mail-type=end
+#SBATCH --mail-user=alexwang@college.harvard.edu
 
 DATE="$(date +%m-%d)"
-mkdir -p logs/$DATE
-mkdir -p out/$DATE
-mkdir -p checkpoints/$DATE
+mkdir -p src/logs/$DATE
+mkdir -p src/out/$DATE
+mkdir -p src/checkpoints/$DATE
 
-#python codebase/main.py --data_path data/lfw_test --log_file logs/06-20/lfw_test.log --optimizer adagrad --n_epochs 10 --init_scale .1 --n_kernels 128 --learning_rate 1
-#python codebase/main.py --data_path data/mnist --log_file logs/06-21/mnist_test.log --optimizer adagrad --n_epochs 10 --init_scale .1 --n_kernels 32 --learning_rate 1 --n_modules 4
-#python codebase/main.py --data_path data/cifar10 --log_file logs/06-21/cifar10_test.log --optimizer adagrad --n_epochs 15 --init_scale .1 --n_kernels 64 --learning_rate 1. --n_modules 5
-#python codebase/main.py --data_path data/cifar100coarse --log_file logs/06-21/cifar100coarse.log --optimizer adagrad --n_epochs 20 --init_scale .1 --n_kernels 64 --learning_rate 1. --n_modules 5
-#python codebase/main.py --data_path data/cifar100fine --log_file logs/06-21/cifar100fine.log --optimizer adagrad --n_epochs 20 --init_scale .1 --n_kernels 364 --learning_rate 1. --n_modules 5
+# Train a good model and save it
+EXP_NAME="facescrub_d128"
+EXP_DIR="/n/regal/rush_lab/awang/data/facescrub_d128"
+#python -m src/codebase/main --data_path $EXP_DIR --log_file src/logs/$DATE/$EXP_NAME.log --out_file src/out/$DATE/$EXP_NAME.hdf5 --save_model_to src/checkpoints/$DATE/$EXP_NAME.ckpt --optimizer adagrad --n_epochs 25 --init_scale .1 --n_kernels 128 --learning_rate .1 --n_modules 7 --batch_size 50
 
-# Save a model
-#python codebase/main.py --data_path data/cifar10 --log_file logs/$DATE/cifar10.log --im_file data/cifar10/te.hdf5 --out_file out/$DATE/cifar10.hdf5 --save_model_to checkpoints/$DATE/cifar10.ckpt --optimizer adagrad --n_epochs 5 --init_scale .1 --n_kernels 128 --learning_rate 1. --n_modules 5 --generator fast_gradient --eps .3 --alpha 0.1
-
-# Load a model
-#python codebase/main.py --data_path data/cifar10 --log_file logs/$DATE/cifar10.log --im_file data/cifar10/te.hdf5 --out_file out/$DATE/cifar10.hdf5 --save_model_to checkpoints/$DATE/cifar10 --load_model_from checkpoints/$DATE/cifar10.ckpt --optimizer adagrad --n_epochs 15 --init_scale .1 --n_kernels 128 --learning_rate 1. --n_modules 5 --generator fast_gradient --eps .3 --alpha 0.1
+# Load a saved model
+MODEL_PATH="src/checkpoints/07-10/$EXP_NAME.ckpt"
+#python -m codebase/main --data_path $EXP_DIR --log_file src/logs/$DATE/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file src/out/$DATE/$EXP_NAME.hdf5 --load_model_from $MODEL_PATH --optimizer adagrad --n_epochs 25 --init_scale .1 --n_kernels 128 --learning_rate .1 --n_modules 7 --batch_size 50
 
 # Fast, no model saving, few epochs
-python codebase/main.py --data_path data/cifar10 --log_file logs/$DATE/cifar10.log --im_file data/cifar10/te.hdf5 --out_file out/$DATE/cifar10.hdf5 --optimizer adagrad --n_epochs 2 --init_scale .1 --n_kernels 64 --learning_rate 1. --n_modules 5 --generator fast_gradient --eps .3 --alpha 0.1
+EXP_NAME="facescrub_d128_fast"
+EXP_DIR="/n/regal/rush_lab/awang/data/facescrub_d128"
+#python -m src/codebase/main --data_path $EXP_DIR --log_file src/logs/$DATE/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file src/out/$DATE/$EXP_NAME.hdf5 --out_path src/out/$DATE/$EXP_NAME --optimizer adagrad --n_epochs 10 --init_scale .1 --n_kernels 32 --learning_rate .1 --n_modules 7 --generator fast_gradient --eps .1 --alpha 0.1 --batch_size 200
+python -m src/codebase/main --data_path $EXP_DIR --log_file src/logs/$DATE/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file src/out/$DATE/$EXP_NAME.hdf5 --out_path src/out/$DATE/$EXP_NAME --load_model_from $MODEL_PATH --optimizer adagrad --n_epochs 0 --init_scale .1 --n_kernels 128 --learning_rate .1 --n_modules 7 --generator carlini --eps .1 --alpha 0.0 --batch_size 200 --n_generator_steps 10000 --generator_learning_rate .01 --generator_opt_const 10. --generate 0
