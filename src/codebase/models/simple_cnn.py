@@ -173,9 +173,17 @@ class SimpleCNN:
         '''
         Return gradient of loss wrt inputs
         '''
-        #with sess as session:
         with self.graph.as_default(), self.session.as_default():
             f_dict = {self.input_ph:inputs, self.targ_ph:outputs, 
                     self.phase_ph:False}
             gradients = self.session.run([self.gradient], feed_dict=f_dict)
         return gradients[0][0]
+
+    def get_logits(self, inputs):
+        '''
+        Return gradient of loss wrt inputs
+        '''
+        with self.graph.as_default(), self.session.as_default():
+            f_dict = {self.input_ph:inputs, self.phase_ph:False}
+            logits = self.session.run(self.logits, feed_dict=f_dict)
+        return logits

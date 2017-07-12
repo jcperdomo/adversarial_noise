@@ -23,12 +23,10 @@ class CarliniL2Generator(): # TODO superclass
             model_vars = [var.name for var in tf.global_variables()]
 
             # placeholders
-            self.ins_ph = ins_ph = tf.placeholder(tf.float32, shape=[None, args.im_size, args.im_size, args.n_channels]) #model.input_ph 
+            self.ins_ph = ins_ph = model.input_ph
             self.outs_ph = outs_ph = \
                     tf.placeholder(tf.float32, shape=[None, args.n_classes])
             self.lr_ph = lr_ph = tf.placeholder(tf.float32, shape=[])
-            self.logits_ph = logits_ph = \
-                    tf.placeholder(tf.float32, shape=[None, args.n_classes])
             self.ws = tf.Variable(np.zeros((n_ins, args.im_size, args.im_size, args.n_channels), dtype=np.float32), name='generator_ws')
 
             # stuff we care about
@@ -36,20 +34,25 @@ class CarliniL2Generator(): # TODO superclass
             self.noise = self.obf_im - ins_ph
 
             # objective function; below is from Carlini
-            label_score = tf.reduce_sum(outs_ph * logits_ph) 
-            second_score = tf.reduce_max((1. - outs_ph) * logits_ph)
-            class_score = tf.maximum(second_score - label_score, -self.k)
+            logits = model.get_logits(self.obf_im)
+            true_logit = tf.reduce_sum(outs_ph * logits) 
+            second_logit = tf.reduce_max((1. - outs_ph) * logits)
+
+            #true_logit = tf.reduce_sum(outs_ph * logits_ph) 
+            #second_logit = tf.reduce_max((1. - outs_ph) * logits_ph)
+            class_score = tf.maximum(true_logit - second_logit + self.k, 0.0)
+            #class_score = tf.maximum(second_score - label_score + self.k, 0.0)
 
             self.objective = tf.reduce_sum(tf.square(self.noise)) + \
                     tf.scalar_mul(self.c, class_score)
 
             # optimizer
             if args.generator_optimizer == 'sgd':
-                self.optimizer = tf.train.GradientDescentOptimizer(lr_ph, name='optimizer').minimize(self.objective)
+                self.optimizer = tf.train.GradientDescentOptimizer(lr_ph, name='optimizer').minimize(self.objective, var_list=[self.ws])
             elif args.generator_optimizer == 'adam':
-                self.optimizer = tf.train.AdamOptimizer(learning_rate=lr_ph, name='optimizer').minimize(self.objective)
+                self.optimizer = tf.train.AdamOptimizer(learning_rate=lr_ph, name='optimizer').minimize(self.objective, var_list=[self.ws])
             elif args.generator_optimizer == 'adagrad':
-                self.optimizer = tf.train.AdagradOptimizer(lr_ph, name='optimizer').minimize(self.objective)
+                self.optimizer = tf.train.AdagradOptimizer(lr_ph, name='optimizer').minimize(self.objective, var_list=[self.ws])
             else:
                 raise NotImplementedError
 
@@ -86,22 +89,24 @@ class CarliniL2Generator(): # TODO superclass
         one_hot_outs[np.arange(outs.shape[0]), outs.astype(int)] = 1
 
         with model.graph.as_default(), model.session.as_default():
-            # Get logits for test images
-            f_dict = {model.input_ph:ins, model.phase_ph:False}
-            logits = model.session.run(model.logits, feed_dict=f_dict)
-
             # initialize only the variables that haven't been initialized yet
-            # to avoid resetting the trained model
             tf.variables_initializer(self.vars).run()
 
             for i in xrange(args.n_generator_steps):
+                # Get logits for current ims+noise
+                '''
+                noise = model.session.run(self.noise, 
+                        feed_dict={self.ins_ph:ins})
+                f_dict = {model.input_ph:ins + noise, model.phase_ph:False}
+                logits = model.session.run(model.logits, feed_dict=f_dict)
+                '''
+
                 f_dict = {self.ins_ph:ins, self.outs_ph:one_hot_outs, 
-                        self.logits_ph:logits, self.lr_ph:self.lr, 
-                        model.phase_ph:False}
+                        self.lr_ph:self.lr, model.phase_ph:False}
                 _, obj_val, noise = model.session.run(
                         [self.optimizer, self.objective, self.noise], 
                         feed_dict=f_dict)
-                if not (i % 100) and i:
+                if not (i % (args.n_generator_steps / 10.)) and i:
                     log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f' %
                             (i, obj_val, np.mean(noise)))
 

@@ -106,8 +106,8 @@ def main(arguments):
             raise NotImplementedError
         log(log_fh, "\tGenerator built!")
         targeted_data = Dataset(te_data.ins, np.random.randint(args.n_classes,size=10), args)
-        noise = generator.generate(targeted_data, model, args, log_fh)
-        #noise = generator.generate(te_data, model, args, log_fh)
+        #noise = generator.generate(targeted_data, model, args, log_fh)
+        noise = generator.generate(te_data, model, args, log_fh)
 
         # Compute the corruption rate
         log(log_fh, "\tComputing corruption rate...")
