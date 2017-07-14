@@ -2,6 +2,10 @@ import os
 import sys
 import pdb
 import h5py
+import boto3
+import string
+import base64
+import random
 import argparse
 import StringIO
 import numpy as np
@@ -18,8 +22,10 @@ from src.codebase.utils.utils import log
 from src.codebase.utils.dataset import Dataset
 
 # constants
-API_NAME = 'illnois'
+API_NAME = 'illnoise'
 VERSION = 'v0.1'
+UPLOAD_FOLDER = 'tmp/'
+IM_DIM = 128
 
 # web app
 app = Flask(__name__)
@@ -27,6 +33,9 @@ app.config['SECRET_KEY'] = 'test'
 
 # globals for hacky / lazy stuff
 true_class = -1
+
+def random_string(length=10):
+    return ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(length))
 
 def encode_arr(arr):
     fh = StringIO.StringIO()
@@ -37,6 +46,10 @@ def encode_arr(arr):
 def index():
     return render_template('index.html')
 
+@app.route('/celeb')
+def celeb():
+    return render_template('celeb.html')
+
 ###################
 ### API METHODS ###
 ###################
@@ -44,7 +57,6 @@ def index():
 
 @app.route('/%s/api/%s/obfuscate' % (API_NAME, VERSION), methods=['POST'])
 def obfuscate():
-    #global true_class
     im = np.array(request.json).reshape((1,32,32,3))
     noise = generator.generate((im, np.array([true_class])), model, args)
     preds = model.predict(im+noise)
@@ -61,6 +73,47 @@ def predict():
     preds = model.predict(im)
     true_class=  np.argmax(preds[0])
     return jsonify(preds=preds[0].tolist())
+
+@app.route('/%s/api/%s/identify' % (API_NAME, VERSION), methods=['POST'])
+def identify():
+    im = np.array(request.json).reshape((128,128,3))
+    im_name = '%s/%s.png' % (UPLOAD_FOLDER, random_string())
+    imsave(im_name, im)
+    with open(im_name) as fh:
+        im = fh.read()
+        im_bytes = bytearray(im)
+    resp = client.recognize_celebrities(Image={'Bytes':im_bytes})
+    celebs, confidences = [], [] # how to handle unrecognized faces
+    for celeb in resp['CelebrityFaces']:
+        celebs.append(celeb['Name'])
+        confidences.append(celeb['MatchConfidence'])
+    return jsonify(celebs=celebs, confidences=confidences)
+
+@app.route('/%s/api/%s/celebfuscate' % (API_NAME, VERSION), methods=['POST'])
+def celebfuscate():
+    im = np.array(request.json).reshape((1,128,128,3))
+    preds = model.predict(im)
+    true_class = np.argmax(preds)
+    noise = generator.generate((im, np.array([true_class])), model, args)
+    enc_noise = encode_arr(noise / (2*generator.eps) + .5)
+    enc_im = encode_arr(im+noise)
+
+    im_name = '%s/%s.png' % (UPLOAD_FOLDER, random_string())
+    imsave(im_name, (noise+im)[0])
+    with open(im_name) as fh:
+        im = fh.read()
+        im_bytes = bytearray(im)
+    resp = client.recognize_celebrities(Image={'Bytes':im_bytes})
+    celebs, confidences = [], [] # how to handle unrecognized faces
+    for celeb in resp['CelebrityFaces']:
+        celebs.append(celeb['Name'])
+        confidences.append(celeb['MatchConfidence'])
+
+    return jsonify(preds=preds[0].tolist(),
+        noise_src='data:image/png;base64,'+enc_noise,
+        obf_src='data:image/png;base64,'+enc_im,
+        celebs=celebs, confidences=confidences)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -94,7 +147,7 @@ if __name__ == '__main__':
     parser.add_argument("--generate", help="1 if should build generator and obfuscate images", type=int, default=1)
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
     parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
-    parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.1)
+    parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=1.)
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
     parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
     parser.add_argument("--generator_opt_const", help="Optimization constant for Carlini generator", type=float, default=.1)
@@ -102,6 +155,8 @@ if __name__ == '__main__':
     parser.add_argument("--generator_learning_rate", help="Learning rate for generator optimization when necessary", type=float, default=.1)
 
     args = parser.parse_args(sys.argv[1:])
+
+    client = boto3.client('rekognition')
 
     if args.data_path[-1] != '/':
         args.data_path += '/'

@@ -1,17 +1,6 @@
 $(function() {
-    $('#upload_btn').on('click', function() {
-        var fd = new FormData();
-        fd.append('file', $('input[type=file]')[0].files[0]);
-        $.ajax({
-            url: '/api/upload',
-            method: 'POST',
-            data: fd,
-            cache: false,
-            contentType: false,
-            processData: false
-        });
-    });
 
+    // Display uploaded image
     $('#upload_im').change(function() {
         if (this.files && this.files[0]) {
             var reader = new FileReader();
@@ -22,7 +11,8 @@ $(function() {
         }
     });
 
-    $('#orig_im').on('load', function () {
+    // Identify person
+    $('#orig_im').on('load', function() {
         var im = document.getElementById('orig_im');
         var canvas = document.createElement('canvas');
         canvas.width = im.width;
@@ -35,31 +25,16 @@ $(function() {
         }
         $.ajax({
             // predict class for image
-            url: '/illnoise/api/v0.1/predict',
+            url: '/illnoise/api/v0.1/identify',
             method: 'POST',
             contentType: 'application/json',
             data: JSON.stringify(inputs),
             success: function(data) {
-                var max = 0;
-                var max_idx = 0;
-                for (let i = 0; i < 10; i++) {
-                    var val = Math.round(data.preds[0][i] * 1000);
-                    if (val > max) {
-                        max = val;
-                        max_idx = i;
-                    }
-                    var n_digits = String(val).length;
-                    for (let j = 0; j < 3 - n_digits; j++) {
-                        val = '0' + val;
-                    }
-                    var text = '0.' + val;
-                    if (val > 999) {
-                        text = '1.000';
-                    }
-                    $('#preds tr').eq(i + 1).find('td').eq(0).text(text);
-                }
+                $('#original_celeb').text(data.celebs[0]);
+                $('#original_confidence').text(data.confidences[0]);
             }
         });
+
         for (var j = 0; j < 10; j++) {
             $('#preds tr').eq(j + 1).find('td').eq(1).text('');
         }
@@ -80,7 +55,7 @@ $(function() {
         }
         $.ajax({
             // predict class for image
-            url: '/illnoise/api/v0.1/obfuscate',
+            url: '/illnoise/api/v0.1/celebfuscate',
             method: 'POST',
             contentType: 'application/json',
             data: JSON.stringify(inputs),
@@ -89,24 +64,8 @@ $(function() {
                 $('#obf_im').attr('src', data.obf_src);
                 $('#noise_im').attr('src', data.noise_src);
 
-                var max = 0;
-                var max_idx = 0;
-                for (let i = 0; i < 10; i++) {
-                    var val = Math.round(data.preds[0][i] * 1000);
-                    if (val > max) {
-                        max = val;
-                        max_idx = i;
-                    }
-                    var n_digits = String(val).length;
-                    for (let j = 0; j < 3 - n_digits; j++) {
-                        val = '0' + val;
-                    }
-                    var text = '0.' + val;
-                    if (val > 999) {
-                        text = '1.000';
-                    }
-                    $('#preds tr').eq(i + 1).find('td').eq(1).text(text);
-                }
+                $('#obfuscated_celeb').text(data.celebs[0]);
+                $('#obfuscated_confidence').text(data.confidences[0]);
             }
         });
     });
