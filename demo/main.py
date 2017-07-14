@@ -1,9 +1,9 @@
 import os
 import sys
 import pdb
+import string
 import h5py
 import boto3
-import string
 import base64
 import random
 import argparse
@@ -18,13 +18,11 @@ from werkzeug.utils import secure_filename
 
 from src.codebase.models.simple_cnn import SimpleCNN
 from src.codebase.generators.fast_gradient import FastGradientGenerator
-from src.codebase.utils.utils import log
-from src.codebase.utils.dataset import Dataset
 
 # constants
 API_NAME = 'illnoise'
 VERSION = 'v0.1'
-UPLOAD_FOLDER = 'tmp/'
+UPLOAD_FOLDER = 'app/tmp'
 IM_DIM = 128
 
 # web app
@@ -156,7 +154,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args(sys.argv[1:])
 
-    client = boto3.client('rekognition')
+    client = boto3.client(service_name='rekognition', region_name='us-east-1')
 
     if args.data_path[-1] != '/':
         args.data_path += '/'
@@ -170,4 +168,4 @@ if __name__ == '__main__':
     model.load_weights(args.load_model_from)
     print('Loaded model from %s' % args.load_model_from)
 
-    app.run()
+    app.run('0.0.0.0', debug=True, port=80)
