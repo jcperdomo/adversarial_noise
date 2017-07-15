@@ -126,13 +126,14 @@ def main(arguments):
                 fh['noise'] = noise
                 fh['ims'] = te_data.ins
                 fh['noisy_ims'] = corrupt_data.ins
-            log(log_fh, "Saved images to %s" % args.out_file)
+            log(log_fh, "Saved image and noise data to %s" % args.out_file)
 
         if args.out_path:
             for i, (clean_im, corrupt_im) in \
                     enumerate(zip(te_data.ins, corrupt_data.ins)):
-                imsave("%s_clean_%d.png" % (args.out_path, i), clean_im)
-                imsave("%s_corrupt_%d.png" % (args.out_path, i), corrupt_im)
+                imsave("%s/clean_%d.png" % (args.out_path, i), np.squeeze(clean_im))
+                imsave("%s/corrupt_%d.png" % (args.out_path, i), np.squeeze(corrupt_im))
+            log(log_fh, "Saved images to %s" % args.out_path)
 
         log(log_fh, "Done!")
 
