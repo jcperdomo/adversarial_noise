@@ -66,6 +66,7 @@ def obfuscate():
 
 @app.route('/%s/api/%s/predict' % (API_NAME, VERSION), methods=['POST'])
 def predict():
+    # TODO: divide by 255
     global true_class
     im = np.array(request.json).reshape((1,32,32,3))
     preds = model.predict(im)

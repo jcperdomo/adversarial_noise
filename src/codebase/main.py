@@ -8,6 +8,7 @@ from scipy.misc import imsave
 from src.codebase.models.simple_cnn import SimpleCNN
 from src.codebase.generators.fast_gradient import FastGradientGenerator
 from src.codebase.generators.carlini_l2 import CarliniL2Generator
+from src.codebase.generators.random import RandomNoiseGenerator
 from src.codebase.utils.dataset import Dataset
 from src.codebase.utils.utils import log as log
 
@@ -97,8 +98,8 @@ def main(arguments):
         _, clean_acc_old = model.validate(te_data)
 
         # Generate the noise
-        if args.generator == 'deepfool':
-            generator = DeepFool()
+        if args.generator == 'random':
+            generator = RandomNoiseGenerator(args)
         elif args.generator == 'carlini':
             generator = CarliniL2Generator(args, model, te_data.n_ins)
         elif args.generator == 'fast_gradient':

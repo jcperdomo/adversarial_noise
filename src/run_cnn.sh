@@ -9,8 +9,8 @@
 #SBATCH --mail-type=end
 #SBATCH --mail-user=alexwang@college.harvard.edu
 
-EXP_NAME="MNIST"
-EXP_DIR="/n/regal/rush_lab/awang/data/mnist"
+EXP_NAME="facescrub"
+EXP_DIR="/n/regal/rush_lab/awang/data/facescrub"
 MODEL_PATH="src/checkpoints/07-15/$EXP_NAME.ckpt"
 
 DATE="$(date +%m-%d)"
@@ -22,22 +22,23 @@ mkdir -p $OUT_PATH
 mkdir -p $CKPT_PATH
 
 N_EPOCHS=10
-N_MODULES=4
-N_KERNELS=32
+N_MODULES=7
+N_KERNELS=64
 LEARNING_RATE=.1
 
-GEN_EPS=.25
+GENERATOR=fast_gradient
+GEN_EPS=.1
 GEN_ALPHA=0.0
 
 if [ ! -f "$MODEL_PATH.meta" ]; then
     # Train a good model and save it
     echo "Training a model from scratch"
-    python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH/$EXP_NAME --save_model_to $CKPT_PATH/$EXP_NAME.ckpt --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator fast_gradient --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1
+    python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --save_model_to $CKPT_PATH/$EXP_NAME.ckpt --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1
 else
     # Load a saved model
     N_EPOCHS=0
     echo "Loading a model"
-    python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --load_model_from $MODEL_PATH --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator fast_gradient --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1
+    python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --load_model_from $MODEL_PATH --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1
 fi
 
 # Fast, no model saving, few epochs
