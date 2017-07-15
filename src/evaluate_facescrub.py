@@ -1,3 +1,4 @@
+import os
 import pdb
 import sys
 import h5py
@@ -7,6 +8,7 @@ import base64
 import random
 import argparse
 import numpy as np
+from scipy.misc import imsave
 
 def random_string(length=10):
     return ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(length))
@@ -26,8 +28,8 @@ def main(arguments):
     args = parser.parse_args(arguments)
 
     with h5py.File(args.data_path, 'r') as fh:
-        clean = fh['ims']
-        corrupt = fh['noisy_ims']
+        clean = fh['ims'][:]
+        corrupt = fh['noisy_ims'][:]
     if not os.path.exists(args.tmp_path):
         os.makedirs(args.tmp_path)
 
@@ -57,26 +59,32 @@ def main(arguments):
         corrupt_resp = client.recognize_celebrities(Image={'Bytes':im_bytes})
         if not corrupt_resp['CelebrityFaces']:
             n_corrupt_unk += 1
-            continue
-        corrupt_celeb = corrupt_resp['CelebrityFaces'][0]
-        if clean_celeb['Name'] != corrupt_celeb['Name']:
-            n_corrupt_wrong += 1
-            wrong_conf += corrupt_celeb['MatchConfidence']
         else:
-            n_corrupt_right += 1
-            right_conf_change += clean_celeb['MatchConfidence'] - \
-                    corrupt_celeb['MatchConfidence']
+            corrupt_celeb = corrupt_resp['CelebrityFaces'][0]
+            if clean_celeb['Name'] != corrupt_celeb['Name']:
+                n_corrupt_wrong += 1
+                wrong_conf += corrupt_celeb['MatchConfidence']
+            else:
+                n_corrupt_right += 1
+                right_conf_change += clean_celeb['MatchConfidence'] - \
+                        corrupt_celeb['MatchConfidence']
 
         os.remove(clean_path)
         os.remove(corrupt_path)
     os.rmdir(args.tmp_path)
 
-    print("Total n ims: %d, n clean unks: %d, n corrupt unks: %d, \
-        n_corrupt wrong: %d, wrong confidence: %.3f, \
-        n_corrupt_right: %d, average confidence change %.3f" % \
-                    (clean.shape[0], n_clean_unk, n_corrupt_unk,
-                        n_corrupt_wrong, wrong_conf / n_corrupt_wrong * 100.,
-                        n_corrupt_right, conf_change / n_corrupt_right * 100.))
+    print("Total n ims: %d, n clean unks: %d, n corrupt unks: %d" % 
+            (clean.shape[0], n_clean_unk, n_corrupt_unk))
+    if n_corrupt_wrong:
+        print("# corrupt wrong: %d, wrong confidence: %.3f" % 
+                (n_corrupt_wrong, wrong_conf / n_corrupt_wrong))
+    else:
+        print("# corrupt wrong: %d" % n_corrupt_wrong)
+    if n_corrupt_right:
+        print("# corrupt right: %d, avg confidence change: %3f" %
+                (n_corrupt_right, right_conf_change / n_corrupt_right))
+    else:
+        print("# corrupt right: %d" % n_corrupt_right)
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))
