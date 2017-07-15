@@ -20,6 +20,7 @@ CKPT_PATH="src/checkpoints/$DATE"
 mkdir -p $LOG_PATH
 mkdir -p $OUT_PATH
 mkdir -p $CKPT_PATH
+TRAIN_NEW=$1
 
 N_EPOCHS=10
 N_MODULES=7
@@ -30,7 +31,7 @@ GENERATOR=fast_gradient
 GEN_EPS=.1
 GEN_ALPHA=0.0
 
-if [ ! -f "$MODEL_PATH.meta" ]; then
+if [ ! -f "$MODEL_PATH.meta" ] || [ $TRAIN_NEW -eq "1" ]; then
     # Train a good model and save it
     echo "Training a model from scratch"
     python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --save_model_to $CKPT_PATH/$EXP_NAME.ckpt --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1
