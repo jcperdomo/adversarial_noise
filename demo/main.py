@@ -56,20 +56,19 @@ def celeb():
 @app.route('/%s/api/%s/obfuscate' % (API_NAME, VERSION), methods=['POST'])
 def obfuscate():
     im = np.array(request.json).reshape((1,32,32,3)) / 255.
+    true_class = np.argmax(model.predict(im)[0])
     noise = generator.generate((im, np.array([true_class])), model, args)
     preds = model.predict(im+noise)
     enc_noise = encode_arr(noise / (2*generator.eps) + .5)
-    enc_im = encode_arr(im+noise)
+    enc_im = encode_arr(255.*(im+noise))
     return jsonify(preds=preds[0].tolist(),
         noise_src='data:image/png;base64,'+enc_noise,
         obf_src='data:image/png;base64,'+enc_im)
 
 @app.route('/%s/api/%s/predict' % (API_NAME, VERSION), methods=['POST'])
 def predict():
-    global true_class
     im = np.array(request.json).reshape((1,32,32,3)) / 255.
     preds = model.predict(im)
-    true_class=  np.argmax(preds[0])
     return jsonify(preds=preds[0].tolist())
 
 @app.route('/%s/api/%s/identify' % (API_NAME, VERSION), methods=['POST'])
