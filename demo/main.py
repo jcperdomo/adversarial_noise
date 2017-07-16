@@ -22,7 +22,7 @@ from src.codebase.generators.fast_gradient import FastGradientGenerator
 # constants
 API_NAME = 'illnoise'
 VERSION = 'v0.1'
-UPLOAD_FOLDER = 'app/tmp'
+UPLOAD_FOLDER = 'demo/tmp'
 IM_DIM = 128
 
 # web app
@@ -90,7 +90,7 @@ def identify():
 
 @app.route('/%s/api/%s/celebfuscate' % (API_NAME, VERSION), methods=['POST'])
 def celebfuscate():
-    im = np.array(request.json).reshape((1,128,128,3))
+    im = np.array(request.json).reshape((1,128,128,3)) / 255.
     preds = model.predict(im)
     true_class = np.argmax(preds)
     noise = generator.generate((im, np.array([true_class])), model, args)
@@ -107,6 +107,9 @@ def celebfuscate():
     for celeb in resp['CelebrityFaces']:
         celebs.append(celeb['Name'])
         confidences.append(celeb['MatchConfidence'])
+    if not celebs:
+        celebs.append("No faces recognized")
+        confidences.append("NA")
 
     return jsonify(preds=preds[0].tolist(),
         noise_src='data:image/png;base64,'+enc_noise,
@@ -169,4 +172,5 @@ if __name__ == '__main__':
     model.load_weights(args.load_model_from)
     print('Loaded model from %s' % args.load_model_from)
 
-    app.run('0.0.0.0', debug=True, port=80)
+    #app.run('0.0.0.0', debug=True, port=80)
+    app.run()
