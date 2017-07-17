@@ -51,6 +51,8 @@ def main(arguments):
     parser.add_argument("--generate", help="1 if should build generator and obfuscate images", type=int, default=1)
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
     parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
+    parser.add_argument("--target", help="Method for selecting class generator should \
+                                            'push' image towards.", type=str, default='')
     parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.1)
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
     parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
@@ -107,14 +109,28 @@ def main(arguments):
         else:
             raise NotImplementedError
         log(log_fh, "\tGenerator built!")
-        targeted_data = Dataset(te_data.ins, np.random.randint(args.n_classes,size=10), args)
-        #noise = generator.generate(targeted_data, model, args, log_fh)
-        noise = generator.generate(te_data, model, args, log_fh)
+        if args.target == 'random':
+            data = Dataset(te_data.ins, np.random.randint(args.n_classes, size=te_data.n_ins), args)
+        elif args.target == 'least':
+            preds = model.predict(te_data.ins)
+            targs = np.argmin(preds[0], axis=1)
+            data = Dataset(te_data.ins, targs, args)
+        elif args.target == 'next_likely':
+            preds = model.predict(te_data.ins)
+            one_hot = np.zeros((te_data.n_ins, args.n_classes))
+            one_hot[np.arange(args.n_classes), te_data.outs] = 1
+            targs = np.argmax(preds * (1. - one_hot), axis=1)
+            data = Dataset(te_data.ins, targs, args)
+        else:
+            data = te_data
+        noise = generator.generate(data, model, args, log_fh)
 
         # Compute the corruption rate
         log(log_fh, "\tComputing corruption rate...")
         _, clean_acc = model.validate(te_data)
         corrupt_ins = te_data.ins + noise
+        # TODO handle out of range [0, 1] pixels (clip)
+        #corrupt_ins = np.max(np.min(te_data.ins + noise, 1.0), 0.0)
         corrupt_data = Dataset(corrupt_ins, te_data.outs, args)    
         _, corrupt_acc = model.validate(corrupt_data)
         assert clean_acc == clean_acc_old

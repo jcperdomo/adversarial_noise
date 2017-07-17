@@ -20,15 +20,15 @@ CKPT_PATH="src/checkpoints/$DATE"
 mkdir -p $LOG_PATH
 mkdir -p $OUT_PATH
 mkdir -p $CKPT_PATH
-TRAIN_NEW=$1
+TRAIN_NEW=${1:-"0"}
 
 N_EPOCHS=10
 N_MODULES=7
 N_KERNELS=64
 LEARNING_RATE=.1
 
-GENERATOR=fast_gradient
-GEN_EPS=.1
+GENERATOR=random
+GEN_EPS=.2
 GEN_ALPHA=0.0
 
 if [ ! -f "$MODEL_PATH.meta" ] || [ $TRAIN_NEW -eq "1" ]; then
