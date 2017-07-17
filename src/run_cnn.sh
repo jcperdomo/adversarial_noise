@@ -11,7 +11,7 @@
 
 EXP_NAME="facescrub"
 EXP_DIR="/n/regal/rush_lab/awang/data/facescrub"
-MODEL="--load_model_from"
+MODEL="load_model_from"
 MODEL_PATH="src/checkpoints/07-15/$EXP_NAME.ckpt"
 
 DATE="$(date +%m-%d)"
@@ -38,7 +38,7 @@ CMD="python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_
 if [ ! -f "$MODEL_PATH.meta" ] || [ $TRAIN_NEW -eq "1" ]; then
     # Train a good model and save it
     echo "Training a model from scratch"
-    MODEL="--save_model_to"
+    MODEL="save_model_to"
     MODEL_PATH="$CKPT_PATH/$EXP_NAME.ckpt"
     eval $CMD
     #python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --save_model_to $CKPT_PATH/$EXP_NAME.ckpt --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1 --target $TARGET
