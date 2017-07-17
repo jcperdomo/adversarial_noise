@@ -33,22 +33,19 @@ TARGET='least'
 GEN_EPS=.2
 GEN_ALPHA=0.0
 
-CMD="python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL $MODEL_PATH --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1 --target $TARGET"
 
 if [ ! -f "$MODEL_PATH.meta" ] || [ $TRAIN_NEW -eq "1" ]; then
     # Train a good model and save it
     echo "Training a model from scratch"
     MODEL="save_model_to"
     MODEL_PATH="$CKPT_PATH/$EXP_NAME.ckpt"
-    eval $CMD
-    #python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --save_model_to $CKPT_PATH/$EXP_NAME.ckpt --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1 --target $TARGET
 else
     # Load a saved model
     echo "Loading a model"
     N_EPOCHS=0
-    eval $CMD
-    #python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --load_model_from $MODEL_PATH --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1 --target $TARGET
 fi
+CMD="python -m src/codebase/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL $MODEL_PATH --optimizer adagrad --n_epochs $N_EPOCHS --init_scale .1 --n_kernels $N_KERNELS --learning_rate $LEARNING_RATE --n_modules $N_MODULES --batch_size 50 --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1 --target $TARGET"
+eval $CMD
 
 # Fast, no model saving, few epochs
 EXP_NAME="facescrub_d128_fast"
