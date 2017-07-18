@@ -3,6 +3,7 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.init as init
 import torch.optim as optim
 from torch.autograd import Variable
 from src.codebase.utils.utils import log
@@ -26,17 +27,23 @@ class ModularCNN(nn.Module):
             - get logits
         '''
         super(ModularCNN, self).__init__()
-        self.weights = []
+        self.use_cuda = not args.no_cuda
+        self.weights = nn.ModuleList()
         for i in xrange(args.n_modules):
             if not i:
                 conv = nn.Conv2d(args.n_channels, args.n_kerns, 
-                        kernel_size=args.kern_size)
+                        kernel_size=args.kern_size, padding=1)
             else:
                 conv = nn.Conv2d(args.n_kerns, args.n_kerns, 
-                        kernel_size=args.kern_size)
+                        kernel_size=args.kern_size, padding=1)
+            init.uniform(conv.weight, -args.init_scale, args.init_scale)
+            init.uniform(conv.bias, -args.init_scale, args.init_scale)
             bn = nn.BatchNorm2d(args.n_kerns)
-            self.weights.append((conv, bn))
+            self.weights.append(conv)
+            self.weights.append(bn)
         self.fc = nn.Linear(args.n_kerns, args.n_classes)
+        init.uniform(self.fc.weight, -args.init_scale, args.init_scale)
+        init.uniform(self.fc.bias, -args.init_scale, args.init_scale)
 
     def forward(self, x):
         '''
@@ -47,10 +54,10 @@ class ModularCNN(nn.Module):
         The tutorial seems to suggest
             conv -> max_pool -> relu
         '''
-        for i in xrange(len(self.weights)):
+        for i in xrange(len(self.weights)/2):
             #x = F.relu(F.max_pool2d(self.weights[i][0](x), 2))
-            x = F.max_pool2d(F.relu(self.weights[i][1](self.weights[i][0](x))), 2)
-        x = self.fc(x)
+            x = F.max_pool2d(F.relu(self.weights[2*i+1](self.weights[2*i](x))), 2)
+        x = self.fc(torch.squeeze(x))
         return F.log_softmax(x)
 
     def train_model(self, args, tr_data, val_data, fh):
@@ -58,47 +65,65 @@ class ModularCNN(nn.Module):
         Train the model according to the parameters specified in args.
         '''
         self.train()
-        optimizer = optim.SGD(self.parameters(), lr=args.lr, momentum=args.momentum)
+        lr = args.lr
+        if args.optimizer == 'sgd':
+            optimizer = optim.SGD(self.parameters(), lr=args.lr, momentum=args.momentum)
+            log(fh, "\tOptimizing with SGD with learning rate %.3f" % lr)
+        elif args.optimizer == 'adam':
+            optimizer = optim.Adam(self.parameters(), lr=args.lr)
+        elif args.optimizer == 'adagrad':
+            optimizer = optim.Adagrad(self.parameters(), lr=args.lr)
+        else:
+            raise NotImplementedError
+
+        if args.load_model_from:
+            self.load_state_dict(torch.load(args.load_model_from))
+
         start_time = time.time()
         val_loss, val_acc = self.evaluate(val_data)
         best_loss, best_acc = val_loss, val_acc
         last_acc = val_acc
-        log(fh, "\tInitial val loss: \t %.3f, val acc: %.2f \t(%.3f s)" %
-                (val_loss, val_acc, time.time() - start_time()))
+        log(fh, "\tInitial val loss: %.3f, \tval acc: %.2f \t(%.3f s)" %
+                (val_loss, val_acc, time.time() - start_time))
+        if args.save_model_to:
+            torch.save(self.state_dict(), args.save_model_to)
+            log(fh, "\t\tSaved model to %s" % args.save_model_to)
 
         for epoch in xrange(args.n_epochs):
-            log(fh, "\tEpoch %d, \tlearning rate: %.3f" % (i+1, args.lr))
+            log(fh, "\tEpoch %d, \tlearning rate: %.3f" % (epoch+1, lr))
             total_loss = 0.
             start_time = time.time()
             for batch_idx in xrange(tr_data.n_batches): # TODO use PyTorch data class
-                ins, targs = tr_data[j]
-                if args.cuda:
+                ins, targs = tr_data[batch_idx]
+                if self.use_cuda:
                     ins, targs = ins.cuda(), targs.cuda()
                 ins, targs = Variable(ins), Variable(targs)
                 optimizer.zero_grad()
                 outs = self(ins)
-                loss = F.nll_loss(outs, targs, size_average=False)
+                loss = F.nll_loss(outs, targs)#, size_average=False)
                 total_loss += loss.data[0]
                 loss.backward()
                 optimizer.step()
 
             _, val_acc = self.evaluate(val_data)
             log(fh, "\t\tTraining loss: %.2f \tValidation accuracy: %.2f \t(%.3f s)"
-                    % (epoch, total_loss / tr_data.n_ins, val_acc, 
+                    % (total_loss / tr_data.n_batches, val_acc, 
                         time.time()-start_time))
             if val_acc > best_acc:
-                # TODO save model
+                if args.save_model_to:
+                    torch.save(self.state_dict(), args.save_model_to)
+                    log(fh, "\t\tSaved model to %s" % args.save_model_to)
                 best_acc = val_acc
             if val_acc <= last_acc:
-                # TODO degrade learning rate
-                pass
+                lr *= .5
+                log(fh, "\t\tLearning rate halved to %.3f" % lr)
             last_acc = val_acc
 
-        # TODO load best model
+        if args.save_model_to:
+            self.load_state_dict(torch.load(args.save_model_to))
         _, val_acc = self.evaluate(val_data)
-        log(fh, "\tFinished training in %.3f s, \tValidation accuracy: %.2f" % 
+        log(fh, "\tFinished training in %.3f s, \tBest validation accuracy: %.2f" % 
                 (time.time() - start_time, val_acc))
-        return
 
     def evaluate(self, data):
         '''
@@ -108,12 +133,12 @@ class ModularCNN(nn.Module):
         total_loss, total_correct = 0., 0.
         for batch_idx in xrange(data.n_batches):
             ins, targs = data[batch_idx]
-            if args.cuda:
+            if self.use_cuda:
                 ins, targs = ins.cuda(), targs.cuda()
             ins, targs = Variable(ins, volatile=True), Variable(targs)
             outs = self(ins)
             total_loss += F.nll_loss(outs, targs, size_average=False).data[0]
             preds = outs.data.max(1)[1]
             total_correct += preds.eq(targs.data).cpu().sum()
-        return total_loss / len(data.dataset), \
-                100. * total_correct / len(data.dataset)
+        return total_loss / data.n_ins, \
+                100. * total_correct / data.n_ins
