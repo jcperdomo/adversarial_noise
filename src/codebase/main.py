@@ -52,7 +52,7 @@ def main(arguments):
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
     parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
     parser.add_argument("--target", help="Method for selecting class generator should \
-                                            'push' image towards.", type=str, default='')
+                                            'push' image towards.", type=str, default='none')
     parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.1)
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
     parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
@@ -113,16 +113,18 @@ def main(arguments):
             data = Dataset(te_data.ins, np.random.randint(args.n_classes, size=te_data.n_ins), args)
         elif args.target == 'least':
             preds = model.predict(te_data.ins)
-            targs = np.argmin(preds[0], axis=1)
+            targs = np.argmin(preds, axis=1)
             data = Dataset(te_data.ins, targs, args)
         elif args.target == 'next_likely':
             preds = model.predict(te_data.ins)
             one_hot = np.zeros((te_data.n_ins, args.n_classes))
-            one_hot[np.arange(args.n_classes), te_data.outs] = 1
+            one_hot[np.arange(te_data.n_ins), te_data.outs.astype(int)] = 1
             targs = np.argmax(preds * (1. - one_hot), axis=1)
             data = Dataset(te_data.ins, targs, args)
-        else:
+        elif args.target == 'none':
             data = te_data
+        else:
+            raise NotImplementedError
         noise = generator.generate(data, model, args, log_fh)
 
         # Compute the corruption rate

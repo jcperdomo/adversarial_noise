@@ -18,7 +18,7 @@ class FastGradientGenerator:
     def __init__(self, args):
         self.eps = args.eps
         self.alpha = args.alpha
-        self.targeted = (args.target != '')
+        self.targeted = (args.target != 'none')
 
     def generate(self, data, model, args, fh=None):
         '''
@@ -53,6 +53,6 @@ class FastGradientGenerator:
             else:
                 gradients = model.get_gradient(ins, outs)
                 if self.targeted:
-                    gradient *= -1.
+                    gradients *= -1.
                 adv_noise = self.eps * np.sign(gradients)
         return adv_noise

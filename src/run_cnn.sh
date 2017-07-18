@@ -28,11 +28,10 @@ N_MODULES=7
 N_KERNELS=64
 LEARNING_RATE=.1
 
-GENERATOR=random
-TARGET='least'
-GEN_EPS=.2
+GENERATOR=fast_gradient
+TARGET='none'
+GEN_EPS=.01
 GEN_ALPHA=0.0
-
 
 if [ ! -f "$MODEL_PATH.meta" ] || [ $TRAIN_NEW -eq "1" ]; then
     # Train a good model and save it
