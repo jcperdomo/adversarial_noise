@@ -11,7 +11,6 @@ from src.codebase.generators.carlini_l2 import CarliniL2Generator
 from src.codebase.generators.random import RandomNoiseGenerator
 from src.codebase.utils.dataset import Dataset
 from src.codebase.utils.utils import log as log
-from src.codebase_pytorch.models.ModularCNN import ModularCNN
 
 def main(arguments):
     '''
@@ -23,7 +22,6 @@ def main(arguments):
             formatter_class=argparse.RawDescriptionHelpFormatter)
     
     # General options
-    parser.add_argument("--cuda", help="1 if use CUDA", type=int, default=0)
     parser.add_argument("--log_file", help="Path to file to log progress", type=str)
     parser.add_argument("--data_path", help="Path to hdf5 files containing training data", type=str, default='')
     parser.add_argument("--im_file", help="Path to h5py? file containing images to obfuscate", type=str, default='')
@@ -32,7 +30,7 @@ def main(arguments):
 
     # Model options
     parser.add_argument("--model", help="Model architecture to use", type=str, default='simple')
-    parser.add_argument("--n_kerns", help="Number of convolutional filters", type=int, default=64)
+    parser.add_argument("--n_kernels", help="Number of convolutional filters", type=int, default=64)
     parser.add_argument("--kern_size", help="Kernel size", type=int, default=3)
     parser.add_argument("--init_scale", help="Initialization scale (std around 0)", type=float, default=.1)
     parser.add_argument("--load_model_from", help="Path to load model from. When loading a model, \
@@ -44,7 +42,7 @@ def main(arguments):
     parser.add_argument("--n_epochs", help="Number of epochs to train for", type=int, default=5)
     parser.add_argument("--optimizer", help="Optimization algorithm to use", type=str, default='adam')
     parser.add_argument("--batch_size", help="Batch size", type=int, default=200)
-    parser.add_argument("--lr", help="Learning rate", type=float, default=.1)
+    parser.add_argument("--learning_rate", help="Learning rate", type=float, default=1.)
 
     # SimpleCNN options
     parser.add_argument("--n_modules", help="Number of convolutional modules to stack (shapes must match)", type=int, default=6)
@@ -53,8 +51,6 @@ def main(arguments):
     parser.add_argument("--generate", help="1 if should build generator and obfuscate images", type=int, default=1)
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
     parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
-    parser.add_argument("--target", help="Method for selecting class generator should \
-                                            'push' image towards.", type=str, default='none')
     parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.1)
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
     parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
@@ -72,19 +68,15 @@ def main(arguments):
         args.im_size = f['im_size'][0]
         args.n_channels = f['n_channels'][0]
     log(log_fh, "Processing %d types of images of size %d and %d channels" % (args.n_classes, args.im_size, args.n_channels))
-    # TODO log more parameters
 
     # Build the model
     log(log_fh, "Building model...")
     if args.model == 'simple':
         model = SimpleCNN(args)
-    if args.model == 'modular':
-        model = ModularCNN(args)
     else:
         raise NotImplementedError
     log(log_fh, "\tDone!")
 
-    # TODO build off of default PyTorch Dataset
     log(log_fh, "Training...")
     with h5py.File(args.data_path+'tr.hdf5', 'r') as fh:
         tr_data = Dataset(fh['ins'][:], fh['outs'][:], args)
@@ -115,30 +107,14 @@ def main(arguments):
         else:
             raise NotImplementedError
         log(log_fh, "\tGenerator built!")
-        if args.target == 'random':
-            data = Dataset(te_data.ins, np.random.randint(args.n_classes, size=te_data.n_ins), args)
-        elif args.target == 'least':
-            preds = model.predict(te_data.ins)
-            targs = np.argmin(preds, axis=1)
-            data = Dataset(te_data.ins, targs, args)
-        elif args.target == 'next_likely':
-            preds = model.predict(te_data.ins)
-            one_hot = np.zeros((te_data.n_ins, args.n_classes))
-            one_hot[np.arange(te_data.n_ins), te_data.outs.astype(int)] = 1
-            targs = np.argmax(preds * (1. - one_hot), axis=1)
-            data = Dataset(te_data.ins, targs, args)
-        elif args.target == 'none':
-            data = te_data
-        else:
-            raise NotImplementedError
-        noise = generator.generate(data, model, args, log_fh)
+        targeted_data = Dataset(te_data.ins, np.random.randint(args.n_classes,size=10), args)
+        #noise = generator.generate(targeted_data, model, args, log_fh)
+        noise = generator.generate(te_data, model, args, log_fh)
 
         # Compute the corruption rate
         log(log_fh, "\tComputing corruption rate...")
         _, clean_acc = model.validate(te_data)
         corrupt_ins = te_data.ins + noise
-        # TODO handle out of range [0, 1] pixels (clip)
-        #corrupt_ins = np.max(np.min(te_data.ins + noise, 1.0), 0.0)
         corrupt_data = Dataset(corrupt_ins, te_data.outs, args)    
         _, corrupt_acc = model.validate(corrupt_data)
         assert clean_acc == clean_acc_old

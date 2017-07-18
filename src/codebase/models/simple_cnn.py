@@ -31,11 +31,11 @@ class SimpleCNN:
             for i in xrange(args.n_modules):
                 if not i:
                     weight_init = tf.truncated_normal(
-                            [args.kern_size, args.kern_size, args.n_channels, args.n_kernels],
+                            [args.kern_size, args.kern_size, args.n_channels, args.n_kerns],
                             stddev=args.init_scale)
                 else:
                     weight_init = tf.truncated_normal(
-                            [args.kern_size, args.kern_size, args.n_kernels, args.n_kernels],
+                            [args.kern_size, args.kern_size, args.n_kerns, args.n_kernels],
                             stddev=args.init_scale)
                 weight = tf.Variable(weight_init, name='weights_%d' % i)
                 conv = tf.nn.conv2d(curr_layer, weight, 
@@ -49,13 +49,13 @@ class SimpleCNN:
                 curr_layer = pool
                 self.weights.append(weight)
 
-            weight_init = tf.truncated_normal([args.n_kernels, args.n_classes], stddev=args.init_scale)
+            weight_init = tf.truncated_normal([args.n_kerns, args.n_classes], stddev=args.init_scale)
             bias_init = tf.truncated_normal([args.n_classes], stddev=args.init_scale*.01)
             weight = tf.Variable(weight_init, name='fc_weight')
             bias = tf.Variable(bias_init, name='fc_bias')
             self.weights += [weight, bias]
             self.logits = logits = \
-                tf.matmul(tf.reshape(curr_layer, [-1, args.n_kernels]), weight) + bias
+                tf.matmul(tf.reshape(curr_layer, [-1, args.n_kerns]), weight) + bias
 
             # Loss and gradients
             self.loss = tf.reduce_mean(
@@ -84,7 +84,7 @@ class SimpleCNN:
 
             # Setup
             self.learning_rate_ph = learning_rate_ph = tf.placeholder(tf.float32, shape=[])
-            learning_rate = args.learning_rate
+            learning_rate = args.lr
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
                 if args.optimizer == 'sgd':
@@ -144,10 +144,12 @@ class SimpleCNN:
                     learning_rate *= .5
                     log(fh, "\t\tLearning rate halved to %.3f" % learning_rate)
                 last_acc = val_acc
-        log(fh, "\tFinished training in %.3f s" % (time.time() - initial_time))
         if args.save_model_to: # could throw an error if 0 epochs
             self.saver.restore(self.session, args.save_model_to)
         self.vars = tf.global_variables() # assuming model is always constructed before generator
+        _, val_acc = self.validate(val_data)
+        log(fh, "\tFinished training in %.3f s, validation accuracy: %.3f" % (time.time() - initial_time, val_acc))
+
 
     def validate(self, data):
         with self.graph.as_default(), self.session.as_default():

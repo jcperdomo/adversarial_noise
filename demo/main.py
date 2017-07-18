@@ -22,7 +22,7 @@ from src.codebase.generators.fast_gradient import FastGradientGenerator
 # constants
 API_NAME = 'illnoise'
 VERSION = 'v0.1'
-UPLOAD_FOLDER = 'app/tmp'
+UPLOAD_FOLDER = 'demo/tmp'
 IM_DIM = 128
 
 # web app
@@ -55,22 +55,20 @@ def celeb():
 
 @app.route('/%s/api/%s/obfuscate' % (API_NAME, VERSION), methods=['POST'])
 def obfuscate():
-    im = np.array(request.json).reshape((1,32,32,3))
+    im = np.array(request.json).reshape((1,32,32,3)) / 255.
+    true_class = np.argmax(model.predict(im)[0])
     noise = generator.generate((im, np.array([true_class])), model, args)
     preds = model.predict(im+noise)
     enc_noise = encode_arr(noise / (2*generator.eps) + .5)
-    enc_im = encode_arr(im+noise)
+    enc_im = encode_arr(255.*(im+noise))
     return jsonify(preds=preds[0].tolist(),
         noise_src='data:image/png;base64,'+enc_noise,
         obf_src='data:image/png;base64,'+enc_im)
 
 @app.route('/%s/api/%s/predict' % (API_NAME, VERSION), methods=['POST'])
 def predict():
-    # TODO: divide by 255
-    global true_class
-    im = np.array(request.json).reshape((1,32,32,3))
+    im = np.array(request.json).reshape((1,32,32,3)) / 255.
     preds = model.predict(im)
-    true_class=  np.argmax(preds[0])
     return jsonify(preds=preds[0].tolist())
 
 @app.route('/%s/api/%s/identify' % (API_NAME, VERSION), methods=['POST'])
@@ -86,11 +84,14 @@ def identify():
     for celeb in resp['CelebrityFaces']:
         celebs.append(celeb['Name'])
         confidences.append(celeb['MatchConfidence'])
+    if not celebs:
+        celebs.append("No faces recognized")
+        confidences.append("NA")
     return jsonify(celebs=celebs, confidences=confidences)
 
 @app.route('/%s/api/%s/celebfuscate' % (API_NAME, VERSION), methods=['POST'])
 def celebfuscate():
-    im = np.array(request.json).reshape((1,128,128,3))
+    im = np.array(request.json).reshape((1,128,128,3)) / 255.
     preds = model.predict(im)
     true_class = np.argmax(preds)
     noise = generator.generate((im, np.array([true_class])), model, args)
@@ -107,7 +108,9 @@ def celebfuscate():
     for celeb in resp['CelebrityFaces']:
         celebs.append(celeb['Name'])
         confidences.append(celeb['MatchConfidence'])
-
+    if not celebs:
+        celebs.append("No faces recognized")
+        confidences.append("NA")
     return jsonify(preds=preds[0].tolist(),
         noise_src='data:image/png;base64,'+enc_noise,
         obf_src='data:image/png;base64,'+enc_im,
@@ -169,4 +172,5 @@ if __name__ == '__main__':
     model.load_weights(args.load_model_from)
     print('Loaded model from %s' % args.load_model_from)
 
-    app.run('0.0.0.0', debug=True, port=80)
+    #app.run('0.0.0.0', debug=True, port=80)
+    app.run()
