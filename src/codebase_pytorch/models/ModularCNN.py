@@ -71,7 +71,8 @@ class ModularCNN(nn.Module):
             #x = F.relu(F.max_pool2d(self.weights[i][0](x), 2))
             x = F.max_pool2d(F.relu(self.weights[2*i+1](self.weights[2*i](x))), 2)
         x = self.fc(torch.squeeze(x))
-        return F.log_softmax(x)
+        return x # returns the logits instead of a (log) distribution
+        #return F.log_softmax(x)
 
     def train_model(self, args, tr_data, val_data, fh):
         '''
@@ -113,7 +114,8 @@ class ModularCNN(nn.Module):
                 ins, targs = Variable(ins), Variable(targs)
                 optimizer.zero_grad()
                 outs = self(ins)
-                loss = F.nll_loss(outs, targs)#, size_average=False)
+                #loss = F.nll_loss(outs, targs)#, size_average=False)
+                loss = F.cross_entropy(outs, targs)#, size_average=False)
                 total_loss += loss.data[0]
                 preds = outs.data.max(1)[1]
                 total_correct += preds.eq(targs.data).cpu().sum()
@@ -154,7 +156,8 @@ class ModularCNN(nn.Module):
                 ins, targs = ins.cuda(), targs.cuda()
             ins, targs = Variable(ins, volatile=True), Variable(targs)
             outs = self(ins)
-            total_loss += F.nll_loss(outs, targs, size_average=False).data[0]
+            #total_loss += F.nll_loss(outs, targs, size_average=False).data[0]
+            total_loss += F.cross_entropy(outs, targs, size_average=False).data[0]
             preds = outs.data.max(1)[1]
             total_correct += preds.eq(targs.data).cpu().sum()
         return total_loss / data.n_ins, \
@@ -166,6 +169,7 @@ class ModularCNN(nn.Module):
             ins, targs = ins.cuda(), targs.cuda()
         ins, targs = Variable(ins, requires_grad=True), Variable(targs)
         outs = self(ins)
-        loss = F.nll_loss(outs, targs)
+        #loss = F.nll_loss(outs, targs)
+        loss = F.cross_entropy(outs, targs)
         loss.backward(retain_variables=True)
         return ins.grad.data.cpu().numpy()

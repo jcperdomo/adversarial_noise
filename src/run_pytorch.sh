@@ -28,12 +28,13 @@ N_KERNELS=128
 INIT_SCALE=.1
 
 OPTIMIZER=adagrad
-N_EPOCHS=5
+N_EPOCHS=25
 LEARNING_RATE=.01
 BATCH_SIZE=50
 
-GENERATOR=fgsm
+GENERATOR=carlini_l2
 TARGET='none'
+GEN_OPTIMIZER=adam
 GEN_EPS=.1
 GEN_ALPHA=0.0
 
@@ -47,5 +48,5 @@ else
     echo "Loading a model"
     N_EPOCHS=0
 fi
-CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LEARNING_RATE --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1 --target $TARGET"
+CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/$EXP_NAME.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LEARNING_RATE --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps 1 --target $TARGET --generator_optimizer $GEN_OPTIMIZER"
 eval $CMD

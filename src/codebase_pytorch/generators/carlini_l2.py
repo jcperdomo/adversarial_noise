@@ -2,8 +2,11 @@ import pdb
 import time
 import torch
 import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
-from src.codebase_pytorch.utils.utils import log as log
+from torch.autograd import Variable
+from src.codebase.utils.utils import log as log
 from src.codebase_pytorch.utils.dataset import Dataset
 
 class CarliniL2Generator(nn.Module):
@@ -15,31 +18,31 @@ class CarliniL2Generator(nn.Module):
         - multiple starting point gradient descent
     '''
 
-    def __init__(self, args, model, n_ins):
+    def __init__(self, args, n_ins):
         '''
 
         '''
         super(CarliniL2Generator, self).__init__()
         self.use_cuda = not args.no_cuda
         self.c = args.generator_opt_const
-        self.k = -args.generator_confidence
+        self.k = -1. * args.generator_confidence
+        self.n_ins = n_ins # expected test size
         self.lr = args.generator_learning_rate
-        self.model = model # can I throw this into forward()?
-        self.ws = Variable(torch.randn(n_ins, args.im_size, args.im_size, args.n_channels).type('float'), requires_grad=True)
 
-    def forward(self, x, labels):
+    def forward(self, x, w, labels, model):
         '''
         Function to optimize
 
         Labels should be one-hot
         '''
-        corrupt_im = .5 * (nn.tanh(self.ws) + 1)
-        logits = self.model(corrupt_im) # need to get the actual logits
-        target_logit = torch.sum(logits * labels)
-        second_logit = torch.max(logits * (1. - labels))
-        class_loss = torch.max(second_logit - target_logit, -self.k)
-        dist_loss = nn.sum(nn.square(corrupt_im - x))
-        return dist_loss + self.c * class_loss
+        corrupt_im = .5 * (F.tanh(w) + 1)
+        logits = model(corrupt_im)
+        target_logit = torch.sum(logits * labels, dim=1)
+        second_logit = torch.max(logits * (1. - labels), dim=1)[0]
+        class_loss = torch.clamp(second_logit - target_logit, max=self.k)
+        dist_loss = torch.sum(torch.pow(corrupt_im - x, 2).view(self.n_ins, -1), dim=1)
+        #dist_loss = torch.sum(torch.pow(torch.norm(corrupt_im - x, p=2, dim=1), 2), dim=1)
+        return torch.sum(dist_loss + self.c * class_loss)
 
     def generate(self, data, model, args, fh):
         '''
@@ -63,32 +66,37 @@ class CarliniL2Generator(nn.Module):
         else:
             raise TypeError("Invalid data format")
 
-        # make outs one-hot
-        one_hot_outs = np.zeros((outs.size()[0], args.n_classes))
-        one_hot_outs[np.arange(outs.size()[0]), outs.numpy().astype(int)] = 1
+        # make targs one-hot
+        one_hot_targs = np.zeros((outs.size()[0], args.n_classes))
+        one_hot_targs[np.arange(outs.size()[0]), outs.numpy().astype(int)] = 1
+        one_hot_targs = torch.FloatTensor(one_hot_targs.astype(int))
+
+        w = torch.zeros(data.ins.size())
+
+        if self.use_cuda:
+            ins, one_hot_targs, w = ins.cuda(), one_hot_targs.cuda(), w.cuda()
+        ins, one_hot_targs, w = Variable(ins), Variable(one_hot_targs), Variable(w, requires_grad=True)
 
         # optimizer
+        params = [w]
         if args.generator_optimizer == 'sgd':
-            optimizer = optim.SGD(self.parameters(), lr=args.lr, momentum=args.momentum)
+            optimizer = optim.SGD(params, lr=args.lr, momentum=args.momentum)
         elif args.generator_optimizer == 'adam':
-            optimizer = optim.Adam(self.parameters(), lr=args.lr)
+            optimizer = optim.Adam(params, lr=args.lr)
         elif args.generator_optimizer == 'adagrad':
-            optimizer = optim.Adagrad(self.parameters(), lr=args.lr())
+            optimizer = optim.Adagrad(params, lr=args.lr())
         else:
             raise NotImplementedError
 
         for i in xrange(args.n_generator_steps):
-            if self.use_cuda:
-                ins, targs = ins.cuda(), targs.cuda()
-            ins, targs = Variable(ins), Variable(targs)
             optimizer.zero_grad()
-            outs = self(ins, one_hot_outs)
+            outs = self(ins, w, one_hot_targs, model)
             obj_val = outs.data[0]
-            noise = .5*(torch.nn.tanh(self.ws) + 1) - ins
             outs.backward()
             optimizer.step()
+            noise = .5*(torch.tanh(w) + 1) - ins
             if not (i % (args.n_generator_steps / 10.)) and i:
                 log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f' %
-                        (i, obj_val, np.mean(noise)))
+                        (i, obj_val, torch.mean(noise)))
 
-        return noise
+        return noise.data.cpu().numpy()

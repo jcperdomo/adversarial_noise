@@ -8,6 +8,7 @@ import numpy as np
 from scipy.misc import imsave
 from src.codebase_pytorch.generators.random import RandomNoiseGenerator
 from src.codebase_pytorch.generators.fgsm import FGSMGenerator
+from src.codebase_pytorch.generators.carlini_l2 import CarliniL2Generator
 from src.codebase_pytorch.utils.dataset import Dataset
 from src.codebase.utils.utils import log as log
 from src.codebase_pytorch.models.ModularCNN import ModularCNN
@@ -111,8 +112,8 @@ def main(arguments):
         if args.generator == 'random':
             generator = RandomNoiseGenerator(args)
             generator_s = 'random noise'
-        elif args.generator == 'carlini':
-            generator = CarliniL2Generator(args, model, te_data.n_ins)
+        elif args.generator == 'carlini_l2':
+            generator = CarliniL2Generator(args, te_data.n_ins)
             generator_s = 'Carlini L2'
         elif args.generator == 'fgsm':
             generator = FGSMGenerator(args)
