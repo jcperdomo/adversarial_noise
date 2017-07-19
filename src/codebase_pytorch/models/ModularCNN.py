@@ -36,14 +36,27 @@ class ModularCNN(nn.Module):
             else:
                 conv = nn.Conv2d(args.n_kerns, args.n_kerns, 
                         kernel_size=args.kern_size, padding=1)
-            init.uniform(conv.weight, -args.init_scale, args.init_scale)
-            init.uniform(conv.bias, -args.init_scale, args.init_scale)
+            if args.init_dist == 'uniform':
+                init.uniform(conv.weight, -args.init_scale, args.init_scale)
+                init.uniform(conv.bias, -args.init_scale, args.init_scale)
+            elif args.init_dist == 'normal':
+                init.normal(conv.weight, 0, args.init_scale)
+                init.normal(conv.bias, 0, args.init_scale)
+            else:
+                raise NotImplementedError
             bn = nn.BatchNorm2d(args.n_kerns)
             self.weights.append(conv)
             self.weights.append(bn)
+
         self.fc = nn.Linear(args.n_kerns, args.n_classes)
-        init.uniform(self.fc.weight, -args.init_scale, args.init_scale)
-        init.uniform(self.fc.bias, -args.init_scale, args.init_scale)
+        if args.init_dist == 'uniform':
+            init.uniform(self.fc.weight, -args.init_scale, args.init_scale)
+            init.uniform(self.fc.bias, .1*-args.init_scale, .1*args.init_scale)
+        elif args.init_dist == 'normal':
+            init.normal(self.fc.weight, 0, args.init_scale)
+            init.normal(conv.bias, 0, .1*args.init_scale)
+        else:
+            raise NotImplementedError
 
     def forward(self, x):
         '''
@@ -91,9 +104,9 @@ class ModularCNN(nn.Module):
 
         for epoch in xrange(args.n_epochs):
             log(fh, "\tEpoch %d, \tlearning rate: %.3f" % (epoch+1, lr))
-            total_loss = 0.
+            total_loss, total_correct = 0., 0.
             start_time = time.time()
-            for batch_idx in xrange(tr_data.n_batches): # TODO use PyTorch data class
+            for batch_idx in xrange(tr_data.n_batches):
                 ins, targs = tr_data[batch_idx]
                 if self.use_cuda:
                     ins, targs = ins.cuda(), targs.cuda()
@@ -102,13 +115,17 @@ class ModularCNN(nn.Module):
                 outs = self(ins)
                 loss = F.nll_loss(outs, targs)#, size_average=False)
                 total_loss += loss.data[0]
+                preds = outs.data.max(1)[1]
+                total_correct += preds.eq(targs.data).cpu().sum()
                 loss.backward()
                 optimizer.step()
 
-            _, val_acc = self.evaluate(val_data)
-            log(fh, "\t\tTraining loss: %.2f \tValidation accuracy: %.2f \t(%.3f s)"
-                    % (total_loss / tr_data.n_batches, val_acc, 
-                        time.time()-start_time))
+            val_loss, val_acc = self.evaluate(val_data)
+            log(fh, "\t\tTraining loss: %.3f \taccuracy: %.2f"
+                    % (total_loss / tr_data.n_batches, 
+                        100. * total_correct / tr_data.n_ins))
+            log(fh, "\t\tVal loss: %.3f \taccuracy: %.2f \t(%.3f s)"
+                    % (val_loss, val_acc, time.time()-start_time))
             if val_acc > best_acc:
                 if args.save_model_to:
                     torch.save(self.state_dict(), args.save_model_to)
@@ -142,3 +159,13 @@ class ModularCNN(nn.Module):
             total_correct += preds.eq(targs.data).cpu().sum()
         return total_loss / data.n_ins, \
                 100. * total_correct / data.n_ins
+
+    def get_gradient(self, ins, targs):
+        self.eval()
+        if self.use_cuda:
+            ins, targs = ins.cuda(), targs.cuda()
+        ins, targs = Variable(ins, requires_grad=True), Variable(targs)
+        outs = self(ins)
+        loss = F.nll_loss(outs, targs)
+        loss.backward(retain_variables=True)
+        return ins.grad.data.cpu().numpy()

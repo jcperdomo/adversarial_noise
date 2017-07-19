@@ -1,6 +1,6 @@
 import pdb
 import numpy as np
-from src.codebase.utils.dataset import Dataset
+from src.codebase_pytorch.utils.dataset import Dataset
 
 class RandomNoiseGenerator:
     '''
@@ -31,5 +31,5 @@ class RandomNoiseGenerator:
         else:
             raise NotImplementedError("Invalid data format")
 
-        random_noise = np.sign(np.random.normal(0, 1, size=ins.shape))
+        random_noise = np.sign(np.random.normal(0, 1, size=ins.size()))
         return self.eps * random_noise

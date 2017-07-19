@@ -6,7 +6,8 @@ import torch
 import argparse
 import numpy as np
 from scipy.misc import imsave
-from src.codebase.generators.random import RandomNoiseGenerator
+from src.codebase_pytorch.generators.random import RandomNoiseGenerator
+from src.codebase_pytorch.generators.fgsm import FGSMGenerator
 from src.codebase_pytorch.utils.dataset import Dataset
 from src.codebase.utils.utils import log as log
 from src.codebase_pytorch.models.ModularCNN import ModularCNN
@@ -33,6 +34,7 @@ def main(arguments):
     parser.add_argument("--n_kerns", help="Number of convolutional filters", type=int, default=64)
     parser.add_argument("--kern_size", help="Kernel size", type=int, default=3)
     parser.add_argument("--init_scale", help="Initialization scale (std around 0)", type=float, default=.1)
+    parser.add_argument("--init_dist", help="Initialization distribution", type=str, default='normal')
     parser.add_argument("--load_model_from", help="Path to load model from. When loading a model, \
                                                     this argument must match the import model type.", 
                                                     type=str, default='')
@@ -45,7 +47,7 @@ def main(arguments):
     parser.add_argument("--lr", help="Learning rate", type=float, default=.1)
     parser.add_argument("--momentum", help="Momentum", type=float, default=.5)
 
-    # SimpleCNN options
+    # ModularCNN options
     parser.add_argument("--n_modules", help="Number of convolutional modules to stack (shapes must match)", type=int, default=6)
 
     # Generator options
@@ -87,7 +89,6 @@ def main(arguments):
         model.cuda()
     log(log_fh, "\tDone!")
 
-    # TODO build off of default PyTorch Dataset
     log(log_fh, "Training...")
     with h5py.File(args.data_path+'tr.hdf5', 'r') as fh:
         tr_data = Dataset(fh['ins'][:], fh['outs'][:], args)
@@ -113,8 +114,8 @@ def main(arguments):
         elif args.generator == 'carlini':
             generator = CarliniL2Generator(args, model, te_data.n_ins)
             generator_s = 'Carlini L2'
-        elif args.generator == 'FGSM':
-            generator = FGSM(args)
+        elif args.generator == 'fgsm':
+            generator = FGSMGenerator(args)
             generator_s = 'FGSM'
         else:
             raise NotImplementedError
@@ -141,13 +142,13 @@ def main(arguments):
             raise NotImplementedError
         log(log_fh, "\tBuilt %s generator with %s targeting and eps %.3f" %
                 (generator_s, target_s, args.eps))
-
         noise = generator.generate(data, model, args, log_fh)
         log(log_fh, "Done!")
 
+        # TODO handle out of range pixels
         # Compute the corruption rate
         log(log_fh, "Computing corruption rate...")
-        corrupt_ins = te_data.ins + noise # TODO handle out of range pixels
+        corrupt_ins = te_data.ins.numpy() + noise 
         #corrupt_ins = np.max(np.min(te_data.ins + noise, 1.0), 0.0)
         corrupt_data = Dataset(corrupt_ins, te_data.outs, args)    
         _, clean_acc = model.evaluate(te_data)
@@ -159,13 +160,13 @@ def main(arguments):
         if args.out_file:
             with h5py.File(args.out_file, 'w') as fh:
                 fh['noise'] = noise
-                fh['ims'] = te_data.ins
-                fh['noisy_ims'] = corrupt_data.ins
+                fh['ims'] = te_data.ins.numpy()
+                fh['noisy_ims'] = corrupt_data.ins.numpy()
             log(log_fh, "Saved image and noise data to %s" % args.out_file)
 
         if args.out_path:
             for i, (clean_im, corrupt_im) in \
-                    enumerate(zip(te_data.ins, corrupt_data.ins)):
+                    enumerate(zip(te_data.ins.numpy(), corrupt_data.ins.numpy())):
                 imsave("%s/clean_%d.png" % (args.out_path, i), np.squeeze(clean_im))
                 imsave("%s/corrupt_%d.png" % (args.out_path, i), np.squeeze(corrupt_im))
             log(log_fh, "Saved images to %s" % args.out_path)

@@ -12,7 +12,7 @@
 EXP_NAME="facescrub"
 EXP_DIR="/n/regal/rush_lab/awang/data/facescrub_pytorch"
 MODEL="load_model_from"
-MODEL_PATH="src/checkpoints/07-18/$EXP_NAME.ckpt"
+MODEL_PATH="src/checkpoints/07-19/$EXP_NAME.ckpt"
 
 DATE="$(date +%m-%d)"
 LOG_PATH="src/logs/$DATE"
@@ -23,19 +23,21 @@ mkdir -p $OUT_PATH
 mkdir -p $CKPT_PATH
 TRAIN_NEW=${1:-"0"}
 
-OPTIMIZER=sgd
-N_EPOCHS=10
 N_MODULES=7
-N_KERNELS=64
-LEARNING_RATE=.01
-BATCH_SIZE=25
+N_KERNELS=128
+INIT_SCALE=.1
 
-GENERATOR=random
+OPTIMIZER=adagrad
+N_EPOCHS=5
+LEARNING_RATE=.01
+BATCH_SIZE=50
+
+GENERATOR=fgsm
 TARGET='none'
 GEN_EPS=.1
 GEN_ALPHA=0.0
 
-if [ ! -f "$MODEL_PATH.meta" ] || [ $TRAIN_NEW -eq "1" ]; then
+if [ ! -f "$MODEL_PATH" ] || [ $TRAIN_NEW -eq "1" ]; then
     # Train a good model and save it
     echo "Training a model from scratch"
     MODEL="save_model_to"

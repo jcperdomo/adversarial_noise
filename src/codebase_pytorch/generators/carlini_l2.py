@@ -1,11 +1,12 @@
 import pdb
 import time
+import torch
+import torch.nn as nn
 import numpy as np
-import tensorflow as tf
-from src.codebase.utils.utils import log as log
-from src.codebase.utils.dataset import Dataset
+from src.codebase_pytorch.utils.utils import log as log
+from src.codebase_pytorch.utils.dataset import Dataset
 
-class CarliniL2Generator(): # TODO superclass
+class CarliniL2Generator(nn.Module):
     '''
     Class for generating noise using method in Carlini and Wagner, '17
 
@@ -15,52 +16,30 @@ class CarliniL2Generator(): # TODO superclass
     '''
 
     def __init__(self, args, model, n_ins):
+        '''
+
+        '''
+        super(CarliniL2Generator, self).__init__()
+        self.use_cuda = not args.no_cuda
         self.c = args.generator_opt_const
         self.k = -args.generator_confidence
         self.lr = args.generator_learning_rate
+        self.model = model # can I throw this into forward()?
+        self.ws = Variable(torch.randn(n_ins, args.im_size, args.im_size, args.n_channels).type('float'), requires_grad=True)
 
-        with model.graph.as_default(), model.session.as_default():
-            model_vars = [var.name for var in tf.global_variables()]
+    def forward(self, x, labels):
+        '''
+        Function to optimize
 
-            # placeholders
-            self.ins_ph = ins_ph = model.input_ph
-            self.outs_ph = outs_ph = \
-                    tf.placeholder(tf.float32, shape=[None, args.n_classes])
-            self.lr_ph = lr_ph = tf.placeholder(tf.float32, shape=[])
-            self.ws = tf.Variable(np.zeros((n_ins, args.im_size, args.im_size, args.n_channels), dtype=np.float32), name='generator_ws')
-
-            # stuff we care about
-            self.obf_im = tf.scalar_mul(.5, tf.tanh(self.ws) + 1)
-            self.noise = self.obf_im - ins_ph
-
-            # objective function; below is from Carlini
-            logits = model.get_logits(self.obf_im)
-            true_logit = tf.reduce_sum(outs_ph * logits) 
-            second_logit = tf.reduce_max((1. - outs_ph) * logits)
-
-            #true_logit = tf.reduce_sum(outs_ph * logits_ph) 
-            #second_logit = tf.reduce_max((1. - outs_ph) * logits_ph)
-            class_score = tf.maximum(true_logit - second_logit + self.k, 0.0)
-            #class_score = tf.maximum(second_score - label_score + self.k, 0.0)
-
-            self.objective = tf.reduce_sum(tf.square(self.noise)) + \
-                    tf.scalar_mul(self.c, class_score)
-
-            # optimizer
-            if args.generator_optimizer == 'sgd':
-                self.optimizer = tf.train.GradientDescentOptimizer(lr_ph, name='optimizer').minimize(self.objective, var_list=[self.ws])
-            elif args.generator_optimizer == 'adam':
-                self.optimizer = tf.train.AdamOptimizer(learning_rate=lr_ph, name='optimizer').minimize(self.objective, var_list=[self.ws])
-            elif args.generator_optimizer == 'adagrad':
-                self.optimizer = tf.train.AdagradOptimizer(lr_ph, name='optimizer').minimize(self.objective, var_list=[self.ws])
-            else:
-                raise NotImplementedError
-
-            generator_vars = [var for var in tf.global_variables() \
-                    if var.name not in model_vars]
-            self.vars = generator_vars
-
-        return
+        Labels should be one-hot
+        '''
+        corrupt_im = .5 * (nn.tanh(self.ws) + 1)
+        logits = self.model(corrupt_im) # need to get the actual logits
+        target_logit = torch.sum(logits * labels)
+        second_logit = torch.max(logits * (1. - labels))
+        class_loss = torch.max(second_logit - target_logit, -self.k)
+        dist_loss = nn.sum(nn.square(corrupt_im - x))
+        return dist_loss + self.c * class_loss
 
     def generate(self, data, model, args, fh):
         '''
@@ -76,8 +55,8 @@ class CarliniL2Generator(): # TODO superclass
         '''
 
         if isinstance(data, tuple):
-            ins = data[0]
-            outs = data[1]
+            ins = torch.FloatTensor(data[0]) if not isinstance(data[0], torch.FloatTensor) else data[0]
+            outs = torch.LongTensor(data[1]) if not isinstance(data[1], torch.LongTensor) else data[1]
         elif isinstance(data, Dataset):
             ins = data.ins
             outs = data.outs
@@ -85,29 +64,31 @@ class CarliniL2Generator(): # TODO superclass
             raise TypeError("Invalid data format")
 
         # make outs one-hot
-        one_hot_outs = np.zeros((outs.shape[0], args.n_classes))
-        one_hot_outs[np.arange(outs.shape[0]), outs.astype(int)] = 1
+        one_hot_outs = np.zeros((outs.size()[0], args.n_classes))
+        one_hot_outs[np.arange(outs.size()[0]), outs.numpy().astype(int)] = 1
 
-        with model.graph.as_default(), model.session.as_default():
-            # initialize only the variables that haven't been initialized yet
-            tf.variables_initializer(self.vars).run()
+        # optimizer
+        if args.generator_optimizer == 'sgd':
+            optimizer = optim.SGD(self.parameters(), lr=args.lr, momentum=args.momentum)
+        elif args.generator_optimizer == 'adam':
+            optimizer = optim.Adam(self.parameters(), lr=args.lr)
+        elif args.generator_optimizer == 'adagrad':
+            optimizer = optim.Adagrad(self.parameters(), lr=args.lr())
+        else:
+            raise NotImplementedError
 
-            for i in xrange(args.n_generator_steps):
-                # Get logits for current ims+noise
-                '''
-                noise = model.session.run(self.noise, 
-                        feed_dict={self.ins_ph:ins})
-                f_dict = {model.input_ph:ins + noise, model.phase_ph:False}
-                logits = model.session.run(model.logits, feed_dict=f_dict)
-                '''
-
-                f_dict = {self.ins_ph:ins, self.outs_ph:one_hot_outs, 
-                        self.lr_ph:self.lr, model.phase_ph:False}
-                _, obj_val, noise = model.session.run(
-                        [self.optimizer, self.objective, self.noise], 
-                        feed_dict=f_dict)
-                if not (i % (args.n_generator_steps / 10.)) and i:
-                    log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f' %
-                            (i, obj_val, np.mean(noise)))
+        for i in xrange(args.n_generator_steps):
+            if self.use_cuda:
+                ins, targs = ins.cuda(), targs.cuda()
+            ins, targs = Variable(ins), Variable(targs)
+            optimizer.zero_grad()
+            outs = self(ins, one_hot_outs)
+            obj_val = outs.data[0]
+            noise = .5*(torch.nn.tanh(self.ws) + 1) - ins
+            outs.backward()
+            optimizer.step()
+            if not (i % (args.n_generator_steps / 10.)) and i:
+                log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f' %
+                        (i, obj_val, np.mean(noise)))
 
         return noise
