@@ -98,6 +98,7 @@ class CarliniL2Generator(nn.Module):
         else:
             raise NotImplementedError
 
+        start_time = time.time()
         for i in xrange(args.n_generator_steps):
             optimizer.zero_grad()
             outs = self(ins, w, one_hot_targs, model, i)
@@ -106,7 +107,8 @@ class CarliniL2Generator(nn.Module):
             optimizer.step()
             noise = .5*(torch.tanh(w + ins) - torch.tanh(ins))
             if not (i % (args.n_generator_steps / 10.)) and i:
-                log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f' %
-                        (i, obj_val, torch.mean(torch.abs(noise)).data[0]))
+                log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f \t(%.3f s)' %
+                        (i, obj_val, torch.mean(torch.abs(noise)).data[0], time.time() - start_time))
+                start_time = time.time()
 
         return noise.data.cpu().numpy()

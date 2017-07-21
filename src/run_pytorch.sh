@@ -9,8 +9,8 @@
 #SBATCH --mail-type=end
 #SBATCH --mail-user=alexwang@college.harvard.edu
 
-EXP_NAME="mnist_carlini"
-EXP_DIR="/n/regal/rush_lab/awang/data/mnist_pytorch"
+EXP_NAME="facescrub"
+EXP_DIR="/n/regal/rush_lab/awang/data/facescrub_pytorch"
 MODEL_ACTION="load_model_from"
 MODEL_PATH="src/checkpoints/07-20/$EXP_NAME.ckpt"
 
@@ -23,27 +23,27 @@ mkdir -p $OUT_PATH
 mkdir -p $CKPT_PATH
 TRAIN_NEW=${1:-"0"}
 
-MODEL=mnist
-N_MODULES=4
-N_KERNELS=64
+MODEL=modular
+N_MODULES=7
+N_KERNELS=128
 INIT_SCALE=.1
 
-OPTIMIZER=sgd
-N_EPOCHS=50
+OPTIMIZER=adagrad
+N_EPOCHS=15
 LR=.01
 MOMENTUM=.9
 WEIGHT_DECAY=.000001
 NESTEROV=true
-BATCH_SIZE=128
+BATCH_SIZE=50
 
 GENERATOR=carlini_l2
-TARGET='next_likely'
+TARGET='least'
 GEN_EPS=.1
 GEN_ALPHA=0.0
-GEN_OPT_CONST=1000.
+GEN_OPT_CONST=10000.
 
 GEN_OPTIMIZER=adam
-N_GEN_STEPS=10000
+N_GEN_STEPS=5000
 GEN_LR=.01
 
 if [ ! -f "$MODEL_PATH" ] || [ $TRAIN_NEW -eq "1" ]; then
