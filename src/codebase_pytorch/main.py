@@ -12,6 +12,7 @@ from src.codebase_pytorch.generators.carlini_l2 import CarliniL2Generator
 from src.codebase_pytorch.utils.dataset import Dataset
 from src.codebase.utils.utils import log as log
 from src.codebase_pytorch.models.ModularCNN import ModularCNN
+from src.codebase_pytorch.models.mnistCNN import MNISTCNN
 
 def main(arguments):
     '''
@@ -47,6 +48,8 @@ def main(arguments):
     parser.add_argument("--batch_size", help="Batch size", type=int, default=200)
     parser.add_argument("--lr", help="Learning rate", type=float, default=.1)
     parser.add_argument("--momentum", help="Momentum", type=float, default=.5)
+    parser.add_argument("--weight_decay", help="Weight decay", type=float, default=0.0)
+    parser.add_argument("--nesterov", help="Momentum", type=bool, default='false')
 
     # ModularCNN options
     parser.add_argument("--n_modules", help="Number of convolutional modules to stack (shapes must match)", type=int, default=6)
@@ -61,7 +64,7 @@ def main(arguments):
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
     parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
     parser.add_argument("--generator_opt_const", help="Optimization constant for Carlini generator", type=float, default=.1)
-    parser.add_argument("--generator_confidence", help="Confidence in obfuscated image for Carlini generator", type=float, default=0)
+    parser.add_argument("--generator_confidence", help="Confidence in obfuscated image for Carlini generator", type=float, default=0.)
     parser.add_argument("--generator_learning_rate", help="Learning rate for generator optimization when necessary", type=float, default=.1)
 
     args = parser.parse_args(arguments)
@@ -84,6 +87,9 @@ def main(arguments):
     if args.model == 'modular':
         model = ModularCNN(args)
         log(log_fh, "\tBuilt modular CNN with %d modules" % (args.n_modules))
+    elif args.model == 'mnist':
+        model = MNISTCNN(args)
+        log(log_fh, "\tBuilt MNIST CNN")
     else:
         raise NotImplementedError
     if args.cuda:
@@ -92,9 +98,9 @@ def main(arguments):
 
     log(log_fh, "Training...")
     with h5py.File(args.data_path+'tr.hdf5', 'r') as fh:
-        tr_data = Dataset(fh['ins'][:], fh['outs'][:], args)
+        tr_data = Dataset(fh['ins'][:] - .5, fh['outs'][:] - .5, args)
     with h5py.File(args.data_path+'val.hdf5', 'r') as fh:
-        val_data = Dataset(fh['ins'][:], fh['outs'][:], args)
+        val_data = Dataset(fh['ins'][:] - .5, fh['outs'][:] - .5, args)
     model.train_model(args, tr_data, val_data, log_fh)
     log(log_fh, "Done!")
 
@@ -104,7 +110,7 @@ def main(arguments):
         # Load images to obfuscate
         log(log_fh, "Generating noise for images...")
         with h5py.File(args.im_file, 'r') as fh:
-            te_data = Dataset(fh['ins'][:], fh['outs'][:], args)
+            te_data = Dataset(fh['ins'][:] - .5, fh['outs'][:] - .5, args)
         log(log_fh, "\tLoaded images!")
         _, clean_acc_old = model.evaluate(te_data)
 
@@ -125,23 +131,23 @@ def main(arguments):
             data = Dataset(te_data.ins, np.random.randint(args.n_classes, size=te_data.n_ins), args)
             target_s = 'random'
         elif args.target == 'least':
-            preds = model.predict(te_data.ins)
+            preds = model.predict(te_data)
             targs = np.argmin(preds, axis=1)
-            data = Dataset(te_data.ins, targs, args)
-            target_s = 'least'
+            data = Dataset(te_data.ins.numpy(), targs, args)
+            target_s = 'least likely'
         elif args.target == 'next_likely':
-            preds = model.predict(te_data.ins)
+            preds = model.predict(te_data)
             one_hot = np.zeros((te_data.n_ins, args.n_classes))
-            one_hot[np.arange(te_data.n_ins), te_data.outs.astype(int)] = 1
+            one_hot[np.arange(te_data.n_ins), te_data.outs.numpy().astype(int)] = 1
             targs = np.argmax(preds * (1. - one_hot), axis=1)
-            data = Dataset(te_data.ins, targs, args)
+            data = Dataset(te_data.ins.numpy(), targs, args)
             target_s = 'second most likely'
         elif args.target == 'none':
             data = te_data
             target_s = 'no'
         else:
             raise NotImplementedError
-        log(log_fh, "\tBuilt %s generator with %s targeting and eps %.3f" %
+        log(log_fh, "\tBuilt %s generator targeting %s class with eps %.3f" %
                 (generator_s, target_s, args.eps))
         noise = generator.generate(data, model, args, log_fh)
         log(log_fh, "Done!")
@@ -157,6 +163,9 @@ def main(arguments):
         log(log_fh, "\tOriginal accuracy: %.3f \tnew accuracy: %.3f" % 
                 (clean_acc, corrupt_acc))
 
+        te_data.ins += .5
+        corrupt_data.ins += .5
+
         # Save noise and images
         if args.out_file:
             with h5py.File(args.out_file, 'w') as fh:
@@ -168,8 +177,8 @@ def main(arguments):
         if args.out_path:
             for i, (clean_im, corrupt_im) in \
                     enumerate(zip(te_data.ins.numpy(), corrupt_data.ins.numpy())):
-                imsave("%s/clean_%d.png" % (args.out_path, i), np.squeeze(clean_im))
-                imsave("%s/corrupt_%d.png" % (args.out_path, i), np.squeeze(corrupt_im))
+                imsave("%s/%d_clean.png" % (args.out_path, i), np.squeeze(clean_im))
+                imsave("%s/%d_corrupt.png" % (args.out_path, i), np.squeeze(corrupt_im))
             log(log_fh, "Saved images to %s" % args.out_path)
 
         log(log_fh, "Done!")

@@ -24,24 +24,32 @@ class CarliniL2Generator(nn.Module):
         '''
         super(CarliniL2Generator, self).__init__()
         self.use_cuda = not args.no_cuda
+        self.targeted = args.target != 'none'
         self.c = args.generator_opt_const
         self.k = -1. * args.generator_confidence
         self.n_ins = n_ins # expected test size
         self.lr = args.generator_learning_rate
 
-    def forward(self, x, w, labels, model):
+    def forward(self, x, w, labels, model, step):
         '''
         Function to optimize
 
         Labels should be one-hot
         '''
-        corrupt_im = .5 * (F.tanh(w) + 1)
+        corrupt_im = .5 * F.tanh(w + x)
         logits = model(corrupt_im)
         target_logit = torch.sum(logits * labels, dim=1)
-        second_logit = torch.max(logits * (1. - labels), dim=1)[0]
-        class_loss = torch.clamp(second_logit - target_logit, max=self.k)
-        dist_loss = torch.sum(torch.pow(corrupt_im - x, 2).view(self.n_ins, -1), dim=1)
+        second_logit = torch.max(logits*(1.-labels)-(labels*10000), dim=1)[0]
+        if self.targeted:
+            class_loss = torch.clamp(second_logit - target_logit, min=self.k)
+        else:
+            class_loss = torch.clamp(target_logit - second_logit, min=self.k)
+        dist_loss = torch.sum(torch.pow(corrupt_im - .5*F.tanh(x), 2).view(self.n_ins, -1), dim=1)
         #dist_loss = torch.sum(torch.pow(torch.norm(corrupt_im - x, p=2, dim=1), 2), dim=1)
+        if not (step % 100):
+            pass
+            #print "***STEP %d***" % step
+            #print class_loss[:20], dist_loss[:20]
         return torch.sum(dist_loss + self.c * class_loss)
 
     def generate(self, data, model, args, fh):
@@ -65,6 +73,8 @@ class CarliniL2Generator(nn.Module):
             outs = data.outs
         else:
             raise TypeError("Invalid data format")
+
+        ins = torch.FloatTensor(np.arctanh(ins.numpy() * 1.999999))
 
         # make targs one-hot
         one_hot_targs = np.zeros((outs.size()[0], args.n_classes))
@@ -90,13 +100,13 @@ class CarliniL2Generator(nn.Module):
 
         for i in xrange(args.n_generator_steps):
             optimizer.zero_grad()
-            outs = self(ins, w, one_hot_targs, model)
+            outs = self(ins, w, one_hot_targs, model, i)
             obj_val = outs.data[0]
             outs.backward()
             optimizer.step()
-            noise = .5*(torch.tanh(w) + 1) - ins
+            noise = .5*(torch.tanh(w + ins) - torch.tanh(ins))
             if not (i % (args.n_generator_steps / 10.)) and i:
                 log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f' %
-                        (i, obj_val, torch.mean(noise)))
+                        (i, obj_val, torch.mean(torch.abs(noise)).data[0]))
 
         return noise.data.cpu().numpy()
