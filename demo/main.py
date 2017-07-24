@@ -128,6 +128,7 @@ if __name__ == '__main__':
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
     # General options
+    parser.add_argument("--run_local", help="1 if run locally", type=int, default=1)
     parser.add_argument("--data_path", help="Path to hdf5 files containing training data", type=str, default='')
 
     # Model options
@@ -178,5 +179,7 @@ if __name__ == '__main__':
     model.load_weights(args.load_model_from)
     print('Loaded model from %s' % args.load_model_from)
 
-    #app.run('0.0.0.0', debug=True, port=80)
-    app.run()
+    if args.run_local:
+        app.run()
+    else:
+        app.run('0.0.0.0', debug=True, port=80)
