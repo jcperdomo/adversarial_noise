@@ -35,7 +35,7 @@ class SimpleCNN:
                             stddev=args.init_scale)
                 else:
                     weight_init = tf.truncated_normal(
-                            [args.kern_size, args.kern_size, args.n_kerns, args.n_kernels],
+                            [args.kern_size, args.kern_size, args.n_kerns, args.n_kerns],
                             stddev=args.init_scale)
                 weight = tf.Variable(weight_init, name='weights_%d' % i)
                 conv = tf.nn.conv2d(curr_layer, weight, 

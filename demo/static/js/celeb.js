@@ -1,6 +1,7 @@
 $(function() {
 
     // Display uploaded image
+    /*
     $('#upload_im').change(function() {
         if (this.files && this.files[0]) {
             var reader = new FileReader();
@@ -9,6 +10,14 @@ $(function() {
             }
             reader.readAsDataURL(this.files[0]);
         }
+    }); */
+    $('#upload_im').change(function() {
+        ImageTools.resize(this.files[0], {
+            width: 128, // max width
+            height: 128 // max height
+        }, function(blob, didResize) {
+            $('#orig_im').attr('src', window.URL.createObjectURL(blob));
+        });
     });
 
     // Identify person
@@ -42,6 +51,7 @@ $(function() {
         $('#noise_im').attr('src', '');
     });
 
+    // Obfuscation behavior
     $('#obfuscate').on('click', function() {
         var im = document.getElementById('orig_im');
         var canvas = document.createElement('canvas');
@@ -53,12 +63,17 @@ $(function() {
         for (var i = 0; i < data.length; i+=4) {
            inputs.push([data[i], data[i+1], data[i+2]]);
         }
+
+        var dropdown = document.getElementById('target');
+        var target = dropdown.selectedIndex;
+
         $.ajax({
             // predict class for image
             url: '/illnoise/api/v0.1/celebfuscate',
             method: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify(inputs),
+            //data: JSON.stringify(inputs),
+            data: JSON.stringify({ image: inputs, target: target }),
             success: function(data) {
 
                 $('#obf_im').attr('src', data.obf_src);

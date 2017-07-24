@@ -89,8 +89,6 @@ def main(arguments):
     with h5py.File(args.data_path+'val.hdf5', 'r') as fh:
         val_data = Dataset(fh['ins'][:], fh['outs'][:], args)
     model.train(tr_data, val_data, args, log_fh)
-    _, val_acc = model.validate(val_data)
-    log(log_fh, "\tValidation accuracy: %.3f" % val_acc)
     log(log_fh, "Done!")
 
     if args.generate:

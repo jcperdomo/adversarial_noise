@@ -8,6 +8,7 @@ import base64
 import random
 import argparse
 import StringIO
+import torch
 import numpy as np
 import tensorflow as tf
 from scipy.misc import imread, imsave
@@ -23,7 +24,8 @@ from src.codebase.generators.fast_gradient import FastGradientGenerator
 API_NAME = 'illnoise'
 VERSION = 'v0.1'
 UPLOAD_FOLDER = 'demo/tmp'
-IM_DIM = 128
+CELEB_IM_DIM = 128
+CIFAR_IM_DIM = 32
 
 # web app
 app = Flask(__name__)
@@ -55,7 +57,7 @@ def celeb():
 
 @app.route('/%s/api/%s/obfuscate' % (API_NAME, VERSION), methods=['POST'])
 def obfuscate():
-    im = np.array(request.json).reshape((1,32,32,3)) / 255.
+    im = np.array(request.json).reshape((1,CIFAR_IM_DIM, CIFAR_IM_DIM,3)) / 255.
     true_class = np.argmax(model.predict(im)[0])
     noise = generator.generate((im, np.array([true_class])), model, args)
     preds = model.predict(im+noise)
@@ -67,7 +69,7 @@ def obfuscate():
 
 @app.route('/%s/api/%s/predict' % (API_NAME, VERSION), methods=['POST'])
 def predict():
-    im = np.array(request.json).reshape((1,32,32,3)) / 255.
+    im = np.array(request.json).reshape((1,CIFAR_IM_DIM, CIFAR_IM_DIM,3)) / 255.
     preds = model.predict(im)
     return jsonify(preds=preds[0].tolist())
 
@@ -91,10 +93,13 @@ def identify():
 
 @app.route('/%s/api/%s/celebfuscate' % (API_NAME, VERSION), methods=['POST'])
 def celebfuscate():
-    im = np.array(request.json).reshape((1,128,128,3)) / 255.
-    preds = model.predict(im)
-    true_class = np.argmax(preds)
-    noise = generator.generate((im, np.array([true_class])), model, args)
+    pdb.set_trace()
+    im = np.array(request.json['image']).reshape((1,128,128,3)) / 255.
+    targ = int(request.json['target'])
+    if targ < 0:
+        preds = model.predict(im)
+        targ = np.argmax(preds)
+    noise = generator.generate((im, np.array([targ])), model, args)
     enc_noise = encode_arr(noise / (2*generator.eps) + .5)
     enc_im = encode_arr(im+noise)
 
@@ -127,7 +132,7 @@ if __name__ == '__main__':
 
     # Model options
     parser.add_argument("--model", help="Model architecture to use", type=str, default='simple')
-    parser.add_argument("--n_kernels", help="Number of convolutional filters", type=int, default=64)
+    parser.add_argument("--n_kerns", help="Number of convolutional filters", type=int, default=64)
     parser.add_argument("--kern_size", help="Kernel size", type=int, default=3)
     parser.add_argument("--init_scale", help="Initialization scale (std around 0)", type=float, default=.1)
     parser.add_argument("--load_model_from", help="Path to load model from. \

@@ -28,8 +28,8 @@ def main(arguments):
     args = parser.parse_args(arguments)
 
     with h5py.File(args.data_path, 'r') as fh:
-        clean = fh['ims'][:]
-        corrupt = fh['noisy_ims'][:]
+        clean = fh['ims'][:].transpose((0,2,3,1))
+        corrupt = fh['noisy_ims'][:].transpose((0,2,3,1))
     if not os.path.exists(args.tmp_path):
         os.makedirs(args.tmp_path)
 
