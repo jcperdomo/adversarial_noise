@@ -1,8 +1,8 @@
 import pdb
 import numpy as np
-from src.codebase.utils.dataset import Dataset
+from src.codebase_pytorch.utils.dataset import Dataset
 
-class FastGradientGenerator:
+class FGSMGenerator():
     '''
     Class for generating noise using fast gradient method (Goodfellow et al., 2015)
     Also allows for random initialization of the noise, which was shown to
@@ -41,18 +41,18 @@ class FastGradientGenerator:
         else:
             raise NotImplementedError("Invalid data format")
 
-        for _ in xrange(args.n_generator_steps):
-            if self.alpha:
-                random_noise = self.alpha * \
-                        np.sign(np.random.normal(0, 1, size=ins.shape))
-                ins = ins + random_noise
-                gradients = model.get_gradient(ins, outs)
-                # TODO deal with targeted version
-                adv_noise = random_noise + \
-                    (self.eps - self.alpha) * np.sign(gradients)
-            else:
-                gradients = model.get_gradient(ins, outs)
-                if self.targeted:
-                    gradients *= -1.
-                adv_noise = self.eps * np.sign(gradients)
+        # TODO iterated version
+        if self.alpha:
+            random_noise = self.alpha * \
+                    np.sign(np.random.normal(0, 1, size=ins.shape))
+            ins = ins + random_noise
+            gradients = model.get_gradient(ins, outs)
+            # TODO deal with targeted version
+            adv_noise = random_noise + \
+                (self.eps - self.alpha) * np.sign(gradients)
+        else:
+            gradients = model.get_gradient(ins, outs)
+            if self.targeted:
+                gradients *= -1.
+            adv_noise = self.eps * np.sign(gradients)
         return adv_noise

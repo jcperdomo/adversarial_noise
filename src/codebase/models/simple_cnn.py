@@ -174,7 +174,7 @@ class SimpleCNN:
         '''
         with self.graph.as_default(), self.session.as_default():
             f_dict = {self.input_ph:inputs, self.phase_ph:False}
-            preds = self.session.run([self.predictions], feed_dict=f_dict)
+            preds = self.session.run(self.predictions, feed_dict=f_dict)
         return preds
 
     def get_gradient(self, inputs, outputs):
@@ -184,8 +184,8 @@ class SimpleCNN:
         with self.graph.as_default(), self.session.as_default():
             f_dict = {self.input_ph:inputs, self.targ_ph:outputs, 
                     self.phase_ph:False}
-            gradients = self.session.run([self.gradient], feed_dict=f_dict)
-        return gradients[0][0]
+            gradients = self.session.run(self.gradient, feed_dict=f_dict)
+        return gradients[0]
 
     def get_logits(self, inputs):
         '''

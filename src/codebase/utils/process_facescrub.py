@@ -106,6 +106,7 @@ def main(arguments):
             print '\tSaved loaded data to %s' % args.save_data_to
         else:
             print '\tAre you sure you don\'t want to save images to HDF5?'
+    ins = ins.transpose((0,3,1,2))
     n_ims, n_classes = ins.shape[0], args.n_classes
     print '\tLoaded %d images for %d classes' % (n_ims, n_classes)
 
