@@ -65,7 +65,7 @@ $(function() {
         }
 
         var dropdown = document.getElementById('target');
-        var target = dropdown.selectedIndex;
+        var target = dropdown.selectedIndex - 1; // first option is to let alg decide
 
         $.ajax({
             // predict class for image

@@ -96,9 +96,9 @@ def celebfuscate():
     pdb.set_trace()
     im = np.array(request.json['image']).reshape((1,128,128,3)) / 255.
     targ = int(request.json['target'])
-    if targ < 0:
+    if targ >- 50:
         preds = model.predict(im)
-        targ = np.argmax(preds)
+        targ = np.argmin(preds)
     noise = generator.generate((im, np.array([targ])), model, args)
     enc_noise = encode_arr(noise / (2*generator.eps) + .5)
     enc_im = encode_arr(im+noise)
@@ -154,6 +154,7 @@ if __name__ == '__main__':
     parser.add_argument("--generate", help="1 if should build generator and obfuscate images", type=int, default=1)
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
     parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
+    parser.add_argument("--target", help="Default way to select class to target", type=str, default='least')
     parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=1.)
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
     parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
