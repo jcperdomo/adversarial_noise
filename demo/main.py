@@ -93,12 +93,13 @@ def identify():
 
 @app.route('/%s/api/%s/celebfuscate' % (API_NAME, VERSION), methods=['POST'])
 def celebfuscate():
-    pdb.set_trace()
     im = np.array(request.json['image']).reshape((1,128,128,3)) / 255.
     targ = int(request.json['target'])
-    if targ >- 50:
+    print('Received target %d' % targ)
+    if targ < 0:
         preds = model.predict(im)
         targ = np.argmin(preds)
+    print('Targeting class %d' % targ)
     noise = generator.generate((im, np.array([targ])), model, args)
     enc_noise = encode_arr(noise / (2*generator.eps) + .5)
     enc_im = encode_arr(im+noise)
@@ -116,8 +117,7 @@ def celebfuscate():
     if not celebs:
         celebs.append("No faces recognized")
         confidences.append("NA")
-    return jsonify(preds=preds[0].tolist(),
-        noise_src='data:image/png;base64,'+enc_noise,
+    return jsonify(noise_src='data:image/png;base64,'+enc_noise,
         obf_src='data:image/png;base64,'+enc_im,
         celebs=celebs, confidences=confidences)
 
