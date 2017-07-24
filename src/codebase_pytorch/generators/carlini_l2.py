@@ -18,19 +18,19 @@ class CarliniL2Generator(nn.Module):
         - multiple starting point gradient descent
     '''
 
-    def __init__(self, args, n_ins):
+    def __init__(self, args, n_ins, early_abort=True):
         '''
 
         '''
         super(CarliniL2Generator, self).__init__()
         self.use_cuda = not args.no_cuda
         self.targeted = args.target != 'none'
+        self.early_abort = early_abort
         self.c = args.generator_opt_const
         self.k = -1. * args.generator_confidence
         self.n_ins = n_ins # expected test size
-        self.lr = args.generator_learning_rate
 
-    def forward(self, x, w, labels, model, step):
+    def forward(self, x, w, labels, model):
         '''
         Function to optimize
 
@@ -45,11 +45,8 @@ class CarliniL2Generator(nn.Module):
         else:
             class_loss = torch.clamp(target_logit - second_logit, min=self.k)
         dist_loss = torch.sum(torch.pow(corrupt_im - .5*F.tanh(x), 2).view(self.n_ins, -1), dim=1)
-        #dist_loss = torch.sum(torch.pow(torch.norm(corrupt_im - x, p=2, dim=1), 2), dim=1)
         if not (step % 100):
             pass
-            #print "***STEP %d***" % step
-            #print class_loss[:20], dist_loss[:20]
         return torch.sum(dist_loss + self.c * class_loss)
 
     def generate(self, data, model, args, fh):
@@ -90,25 +87,34 @@ class CarliniL2Generator(nn.Module):
         # optimizer
         params = [w]
         if args.generator_optimizer == 'sgd':
-            optimizer = optim.SGD(params, lr=args.lr, momentum=args.momentum)
+            optimizer = optim.SGD(params, lr=args.generator_lr, momentum=args.momentum)
         elif args.generator_optimizer == 'adam':
-            optimizer = optim.Adam(params, lr=args.lr)
+            optimizer = optim.Adam(params, lr=args.generator_lr)
         elif args.generator_optimizer == 'adagrad':
-            optimizer = optim.Adagrad(params, lr=args.lr())
+            optimizer = optim.Adagrad(params, lr=args.generator_lr)
         else:
             raise NotImplementedError
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 
+                'min', factor=.5, patience=3, threshold=1e-3)
 
         start_time = time.time()
+        prev_val = self(ins, w, one_hot_targs, model).data[0]
         for i in xrange(args.n_generator_steps):
+            if not (i % args.n_generator_steps / 10.):
+                log(fh, '\t\tStep %d \tLearning rate: %.3f' % (i, scheduler.get_lr()[0]))
             optimizer.zero_grad()
-            outs = self(ins, w, one_hot_targs, model, i)
+            outs = self(ins, w, one_hot_targs, model)
             obj_val = outs.data[0]
             outs.backward()
             optimizer.step()
             noise = .5*(torch.tanh(w + ins) - torch.tanh(ins))
             if not (i % (args.n_generator_steps / 10.)) and i:
-                log(fh, '\t\tStep %d: objective: %.4f, avg noise magnitude: %.7f \t(%.3f s)' %
-                        (i, obj_val, torch.mean(torch.abs(noise)).data[0], time.time() - start_time))
+                log(fh, '\t\t\tobjective: %.3f, avg noise magnitude: %.7f \t(%.3f s)' % (obj_val, torch.mean(torch.abs(noise)).data[0], time.time() - start_time))
+                scheduler.step(obj_val)
+                if obj_val > prev_val and self.early_abort:
+                    log(fh, '\t\t\tAborted search because stuck')
+                    break
+                prev_val =  obj_val
                 start_time = time.time()
 
         return noise.data.cpu().numpy()

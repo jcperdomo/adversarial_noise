@@ -57,15 +57,17 @@ def main(arguments):
     # Generator options
     parser.add_argument("--generate", help="1 if should build generator and obfuscate images", type=int, default=1)
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
-    parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
-    parser.add_argument("--target", help="Method for selecting class generator should \
-                                            'push' image towards.", type=str, default='none')
+    parser.add_argument("--target", help="Method for selecting class generator should 'push' image towards.", type=str, default='none')
     parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=.1)
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
-    parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
     parser.add_argument("--generator_opt_const", help="Optimization constant for Carlini generator", type=float, default=.1)
     parser.add_argument("--generator_confidence", help="Confidence in obfuscated image for Carlini generator", type=float, default=0.)
-    parser.add_argument("--generator_learning_rate", help="Learning rate for generator optimization when necessary", type=float, default=.1)
+
+    # Generator training options
+    parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
+    parser.add_argument("--generator_lr", help="Learning rate for generator optimization when necessary", type=float, default=.1)
+    parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
+
 
     args = parser.parse_args(arguments)
 
