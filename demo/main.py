@@ -93,12 +93,13 @@ def identify():
 
 @app.route('/%s/api/%s/celebfuscate' % (API_NAME, VERSION), methods=['POST'])
 def celebfuscate():
-    pdb.set_trace()
     im = np.array(request.json['image']).reshape((1,128,128,3)) / 255.
     targ = int(request.json['target'])
+    print('Received target %d' % targ)
     if targ < 0:
         preds = model.predict(im)
-        targ = np.argmax(preds)
+        targ = np.argmin(preds)
+    print('Targeting class %d' % targ)
     noise = generator.generate((im, np.array([targ])), model, args)
     enc_noise = encode_arr(noise / (2*generator.eps) + .5)
     enc_im = encode_arr(im+noise)
@@ -116,8 +117,7 @@ def celebfuscate():
     if not celebs:
         celebs.append("No faces recognized")
         confidences.append("NA")
-    return jsonify(preds=preds[0].tolist(),
-        noise_src='data:image/png;base64,'+enc_noise,
+    return jsonify(noise_src='data:image/png;base64,'+enc_noise,
         obf_src='data:image/png;base64,'+enc_im,
         celebs=celebs, confidences=confidences)
 
@@ -128,6 +128,7 @@ if __name__ == '__main__':
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
     # General options
+    parser.add_argument("--run_local", help="1 if run locally", type=int, default=1)
     parser.add_argument("--data_path", help="Path to hdf5 files containing training data", type=str, default='')
 
     # Model options
@@ -154,6 +155,7 @@ if __name__ == '__main__':
     parser.add_argument("--generate", help="1 if should build generator and obfuscate images", type=int, default=1)
     parser.add_argument("--generator", help="Type of noise generator to use", type=str, default='fast_gradient')
     parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
+    parser.add_argument("--target", help="Default way to select class to target", type=str, default='least')
     parser.add_argument("--eps", help="Magnitude of the noise", type=float, default=1.)
     parser.add_argument("--alpha", help="Magnitude of random initialization for noise, 0 for none", type=float, default=.0)
     parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
@@ -177,5 +179,7 @@ if __name__ == '__main__':
     model.load_weights(args.load_model_from)
     print('Loaded model from %s' % args.load_model_from)
 
-    #app.run('0.0.0.0', debug=True, port=80)
-    app.run()
+    if args.run_local:
+        app.run()
+    else:
+        app.run('0.0.0.0', debug=True, port=80)
