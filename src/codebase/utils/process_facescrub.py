@@ -98,6 +98,14 @@ def main(arguments):
         print '\tReading data from images'
         ins, outs, name2idx = load_images(args.data_path)
 
+        pairs = [(idx, name) for (name, idx) in name2idx.iteritems()]
+        pairs.sort(key=lambda x: x[0])
+        if args.out_path[-1] != '/':
+            args.out_path += '/'
+        with open(args.out_path + 'classes.txt', 'w') as fh:
+            for idx, name in pairs:
+                fh.write('%d\t%s\n' % (idx, name))
+
         if args.save_data_to:
             with h5py.File(args.save_data_to, 'w') as f:
                 f['ins'] = ins

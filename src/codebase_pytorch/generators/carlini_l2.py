@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Variable
 from src.codebase.utils.utils import log as log
+from src.codebase_pytorch.utils.scheduler import ReduceLROnPlateau
 from src.codebase_pytorch.utils.dataset import Dataset
 
 class CarliniL2Generator(nn.Module):
@@ -45,8 +46,6 @@ class CarliniL2Generator(nn.Module):
         else:
             class_loss = torch.clamp(target_logit - second_logit, min=self.k)
         dist_loss = torch.sum(torch.pow(corrupt_im - .5*F.tanh(x), 2).view(self.n_ins, -1), dim=1)
-        if not (step % 100):
-            pass
         return torch.sum(dist_loss + self.c * class_loss)
 
     def generate(self, data, model, args, fh):
@@ -94,8 +93,8 @@ class CarliniL2Generator(nn.Module):
             optimizer = optim.Adagrad(params, lr=args.generator_lr)
         else:
             raise NotImplementedError
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 
-                'min', factor=.5, patience=3, threshold=1e-3)
+        scheduler = ReduceLROnPlateau(optimizer, 
+                'min', factor=.5, patience=3, epsilon=1e-3)
 
         start_time = time.time()
         prev_val = self(ins, w, one_hot_targs, model).data[0]
@@ -110,7 +109,7 @@ class CarliniL2Generator(nn.Module):
             noise = .5*(torch.tanh(w + ins) - torch.tanh(ins))
             if not (i % (args.n_generator_steps / 10.)) and i:
                 log(fh, '\t\t\tobjective: %.3f, avg noise magnitude: %.7f \t(%.3f s)' % (obj_val, torch.mean(torch.abs(noise)).data[0], time.time() - start_time))
-                scheduler.step(obj_val)
+                scheduler.step(obj_val, i)
                 if obj_val > prev_val and self.early_abort:
                     log(fh, '\t\t\tAborted search because stuck')
                     break

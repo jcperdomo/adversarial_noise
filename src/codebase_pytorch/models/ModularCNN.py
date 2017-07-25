@@ -8,6 +8,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 import numpy as np
 from src.codebase.utils.utils import log
+from src.codebase_pytorch.utils.scheduler import ReduceLROnPlateau
 
 '''
 
@@ -75,14 +76,16 @@ class ModularCNN(nn.Module):
         self.train()
         lr = args.lr
         if args.optimizer == 'sgd':
-            optimizer = optim.SGD(self.parameters(), lr=args.lr, momentum=args.momentum)
+            optimizer = optim.SGD(self.parameters(), lr=lr, momentum=args.momentum)
             log(fh, "\tOptimizing with SGD with learning rate %.3f" % lr)
         elif args.optimizer == 'adam':
-            optimizer = optim.Adam(self.parameters(), lr=args.lr)
+            optimizer = optim.Adam(self.parameters(), lr=lr)
         elif args.optimizer == 'adagrad':
-            optimizer = optim.Adagrad(self.parameters(), lr=args.lr)
+            optimizer = optim.Adagrad(self.parameters(), lr=lr)
         else:
             raise NotImplementedError
+        scheduler = ReduceLROnPlateau(optimizer, 
+                'max', factor=.5, patience=3, epsilon=1e-1)
 
         if args.load_model_from:
             self.load_state_dict(torch.load(args.load_model_from))
@@ -90,7 +93,6 @@ class ModularCNN(nn.Module):
         start_time = time.time()
         val_loss, val_acc = self.evaluate(val_data)
         best_loss, best_acc = val_loss, val_acc
-        last_acc = val_acc
         log(fh, "\tInitial val loss: %.3f, \tval acc: %.2f \t(%.3f s)" %
                 (val_loss, val_acc, time.time() - start_time))
         if args.save_model_to:
@@ -98,7 +100,7 @@ class ModularCNN(nn.Module):
             log(fh, "\t\tSaved model to %s" % args.save_model_to)
 
         for epoch in xrange(args.n_epochs):
-            log(fh, "\tEpoch %d, \tlearning rate: %.3f" % (epoch+1, lr))
+            log(fh, "\tEpoch %d, \tlearning rate: %.3f" % (epoch+1, scheduler.get_lr()[0]))
             total_loss, total_correct = 0., 0.
             start_time = time.time()
             for batch_idx in xrange(tr_data.n_batches):
@@ -127,10 +129,7 @@ class ModularCNN(nn.Module):
                     torch.save(self.state_dict(), args.save_model_to)
                     log(fh, "\t\tSaved model to %s" % args.save_model_to)
                 best_acc = val_acc
-            if val_acc <= last_acc:
-                lr *= .5
-                log(fh, "\t\tLearning rate halved to %.3f" % lr)
-            last_acc = val_acc
+            scheduler.step(val_acc, epoch)
 
         if args.save_model_to:
             self.load_state_dict(torch.load(args.save_model_to))
