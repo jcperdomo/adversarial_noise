@@ -6,13 +6,22 @@ import torch
 import argparse
 import numpy as np
 from scipy.misc import imsave
+
+# Helper stuff
+from src.codebase_pytorch.utils.dataset import Dataset
+from src.codebase.utils.utils import log as log
+from src.codebase_pytorch.utils.hooks import print_outputs, print_grads
+
+# Classifiers
+from src.codebase_pytorch.models.ModularCNN import ModularCNN
+from src.codebase_pytorch.models.mnistCNN import MNISTCNN
+from src.codebase_pytorch.models.squeezeNet import SqueezeNet, squeezenet1_0, squeezenet1_1
+from src.codebase_pytorch.models.openFace import openFaceClassifier
+
+# Generators
 from src.codebase_pytorch.generators.random import RandomNoiseGenerator
 from src.codebase_pytorch.generators.fgsm import FGSMGenerator
 from src.codebase_pytorch.generators.carlini_l2 import CarliniL2Generator
-from src.codebase_pytorch.utils.dataset import Dataset
-from src.codebase.utils.utils import log as log
-from src.codebase_pytorch.models.ModularCNN import ModularCNN
-from src.codebase_pytorch.models.mnistCNN import MNISTCNN
 
 def main(arguments):
     '''
@@ -37,10 +46,9 @@ def main(arguments):
     parser.add_argument("--kern_size", help="Kernel size", type=int, default=3)
     parser.add_argument("--init_scale", help="Initialization scale (std around 0)", type=float, default=.1)
     parser.add_argument("--init_dist", help="Initialization distribution", type=str, default='normal')
-    parser.add_argument("--load_model_from", help="Path to load model from. When loading a model, \
-                                                    this argument must match the import model type.", 
-                                                    type=str, default='')
+    parser.add_argument("--load_model_from", help="Path to load model from. When loading a model, this argument must match the import model type.", type=str, default='')
     parser.add_argument("--save_model_to", help="Path to save model to", type=str, default='')
+    parser.add_argument("--load_openface", help="Path to load pretrained openFace model from.", type=str, default='src/codebase_pytorch/models/openFace.ckpt')
 
     # Training options
     parser.add_argument("--n_epochs", help="Number of epochs to train for", type=int, default=5)
@@ -92,6 +100,11 @@ def main(arguments):
     elif args.model == 'mnist':
         model = MNISTCNN(args)
         log(log_fh, "\tBuilt MNIST CNN")
+    elif args.model == 'squeeze':
+        #model = squeezenet1_1(pretrained=True, n_classes=args.n_classes, use_cuda=args.cuda)
+        model = SqueezeNet(n_classes=args.n_classes, use_cuda=args.cuda)
+    elif args.model == 'openface':
+        model = openFaceClassifier(args)
     else:
         raise NotImplementedError
     if args.cuda:

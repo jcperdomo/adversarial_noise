@@ -9,10 +9,10 @@
 #SBATCH --mail-type=end
 #SBATCH --mail-user=alexwang@college.harvard.edu
 
-EXP_NAME="facescrub"
+EXP_NAME="facescrub_openface"
 EXP_DIR="/n/regal/rush_lab/awang/data/facescrub_pytorch"
 MODEL_ACTION="load_model_from"
-MODEL_PATH="src/checkpoints/07-20/$EXP_NAME.ckpt"
+MODEL_PATH="src/checkpoints/07-28/$EXP_NAME.ckpt"
 
 DATE="$(date +%m-%d)"
 LOG_PATH="src/logs/$DATE"
@@ -23,7 +23,7 @@ mkdir -p $OUT_PATH
 mkdir -p $CKPT_PATH
 TRAIN_NEW=${1:-"0"}
 
-MODEL=modular
+MODEL=openface
 N_MODULES=7
 N_KERNELS=128
 INIT_SCALE=.1
@@ -32,10 +32,11 @@ OPTIMIZER=adagrad
 N_EPOCHS=25
 LR=.01
 MOMENTUM=.9
-WEIGHT_DECAY=.000001
+WEIGHT_DECAY=.0002
 NESTEROV=true
 BATCH_SIZE=50
 
+GENERATE=0
 GENERATOR=carlini_l2
 TARGET='next_likely'
 GEN_EPS=.1
@@ -56,5 +57,5 @@ else
     echo "Loading a model"
     N_EPOCHS=0
 fi
-CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/${EXP_NAME}.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL_ACTION $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LR --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps $N_GEN_STEPS --target $TARGET --generator_optimizer $GEN_OPTIMIZER --generator_lr $GEN_LR --generator_opt_const $GEN_OPT_CONST --model $MODEL"
+CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/${EXP_NAME}.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL_ACTION $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LR --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps $N_GEN_STEPS --target $TARGET --generator_optimizer $GEN_OPTIMIZER --generator_lr $GEN_LR --generator_opt_const $GEN_OPT_CONST --model $MODEL --generate $GENERATE"
 eval $CMD

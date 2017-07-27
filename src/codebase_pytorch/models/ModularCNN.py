@@ -177,7 +177,6 @@ class ModularCNN(nn.Module):
             ins, targs = ins.cuda(), targs.cuda()
         ins, targs = Variable(ins, requires_grad=True), Variable(targs)
         outs = self(ins)
-        #loss = F.nll_loss(outs, targs)
         loss = F.cross_entropy(outs, targs)
         loss.backward(retain_variables=True)
         return ins.grad.data.cpu().numpy()

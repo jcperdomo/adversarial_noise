@@ -47,7 +47,8 @@ class FGSMGenerator():
                     np.sign(np.random.normal(0, 1, size=ins.shape))
             ins = ins + random_noise
             gradients = model.get_gradient(ins, outs)
-            # TODO deal with targeted version
+            if self.targeted:
+                gradients *= -1.
             adv_noise = random_noise + \
                 (self.eps - self.alpha) * np.sign(gradients)
         else:
