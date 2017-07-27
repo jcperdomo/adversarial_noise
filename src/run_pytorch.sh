@@ -12,7 +12,7 @@
 EXP_NAME="facescrub_openface"
 EXP_DIR="/n/regal/rush_lab/awang/data/facescrub_pytorch"
 MODEL_ACTION="load_model_from"
-MODEL_PATH="src/checkpoints/07-28/$EXP_NAME.ckpt"
+MODEL_PATH="src/checkpoints/07-27/$EXP_NAME.ckpt"
 
 DATE="$(date +%m-%d)"
 LOG_PATH="src/logs/$DATE"
@@ -29,8 +29,8 @@ N_KERNELS=128
 INIT_SCALE=.1
 
 OPTIMIZER=adagrad
-N_EPOCHS=25
-LR=.01
+N_EPOCHS=50
+LR=1.
 MOMENTUM=.9
 WEIGHT_DECAY=.0002
 NESTEROV=true

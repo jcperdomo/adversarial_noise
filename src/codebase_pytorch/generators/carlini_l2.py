@@ -19,17 +19,18 @@ class CarliniL2Generator(nn.Module):
         - multiple starting point gradient descent
     '''
 
-    def __init__(self, args, n_ins, early_abort=True):
+    def __init__(self, args, batch_size, early_abort=True):
         '''
 
         '''
         super(CarliniL2Generator, self).__init__()
         self.use_cuda = not args.no_cuda
         self.targeted = args.target != 'none'
-        self.early_abort = early_abort
-        self.c = args.generator_opt_const
         self.k = -1. * args.generator_confidence
-        self.n_ins = n_ins # expected test size
+        self.binary_search_steps = args.n_binary_search_steps
+        self.init_const = args.generator_init_opt_const
+        self.early_abort = early_abort
+        self.batch_size = batch_size # rename to batch_size
 
     def forward(self, x, w, labels, model):
         '''
@@ -46,7 +47,7 @@ class CarliniL2Generator(nn.Module):
         else:
             class_loss = torch.clamp(target_logit - second_logit, min=self.k)
         dist_loss = torch.sum(torch.pow(corrupt_im - .5*F.tanh(x), 2).view(self.n_ins, -1), dim=1)
-        return torch.sum(dist_loss + self.c * class_loss)
+        return torch.sum(dist_loss + self.c * class_loss), dist_loss, corrupt_im, logits
 
     def generate(self, data, model, args, fh):
         '''
@@ -59,7 +60,20 @@ class CarliniL2Generator(nn.Module):
             - fh: file handle for logging progress
         outputs:
             - noise: n_ims x im_size x im_size x n_channels
+
+        TODO
+            - handle non batch_size inputs (smaller and larger)
         '''
+
+        def compare(x, y):
+            if not isinstance(x (float, int, np.int32)):
+                x = np.copy(x)
+                x[y] += self.k # confidence
+                x = np.argmax(x)
+            if self.targeted:
+                return x == y
+            else:
+                return x != y
 
         if isinstance(data, tuple):
             ins = torch.FloatTensor(data[0]) if not isinstance(data[0], torch.FloatTensor) else data[0]
@@ -70,6 +84,9 @@ class CarliniL2Generator(nn.Module):
         else:
             raise TypeError("Invalid data format")
 
+        batch_size = self.batch_size
+
+        # convert to arctanh space, following Carlini code
         ins = torch.FloatTensor(np.arctanh(ins.numpy() * 1.999999))
 
         # make targs one-hot
@@ -77,6 +94,7 @@ class CarliniL2Generator(nn.Module):
         one_hot_targs[np.arange(outs.size()[0]), outs.numpy().astype(int)] = 1
         one_hot_targs = torch.FloatTensor(one_hot_targs.astype(int))
 
+        # variable to optimize
         w = torch.zeros(data.ins.size())
 
         if self.use_cuda:
@@ -93,27 +111,69 @@ class CarliniL2Generator(nn.Module):
             optimizer = optim.Adagrad(params, lr=args.generator_lr)
         else:
             raise NotImplementedError
-        scheduler = ReduceLROnPlateau(optimizer, 
-                'min', factor=.5, patience=3, epsilon=1e-3)
+        scheduler = ReduceLROnPlateau(optimizer, 'min', factor=.5, patience=3, threshold=1e-3)
+
+        lower_bounds = np.zeroes(batch_size)
+        upper_bounds = np.ones(batch_size)
+        opt_consts = np.ones(batch_size) * self.init_const
+
+        overall_best_ims = np.zeroes(data.ins.size())
+        overall_best_dists = [1e10] * batch_size
+        overall_best_classes = [-1] * batch_size # class of the corresponding best im, doesn't seem totally necessary to track
 
         start_time = time.time()
-        prev_val = self(ins, w, one_hot_targs, model).data[0]
-        for i in xrange(args.n_generator_steps):
-            if not (i % args.n_generator_steps / 10.):
-                log(fh, '\t\tStep %d \tLearning rate: %.3f' % (i, scheduler.get_lr()[0]))
-            optimizer.zero_grad()
-            outs = self(ins, w, one_hot_targs, model)
-            obj_val = outs.data[0]
-            outs.backward()
-            optimizer.step()
-            noise = .5*(torch.tanh(w + ins) - torch.tanh(ins))
-            if not (i % (args.n_generator_steps / 10.)) and i:
-                log(fh, '\t\t\tobjective: %.3f, avg noise magnitude: %.7f \t(%.3f s)' % (obj_val, torch.mean(torch.abs(noise)).data[0], time.time() - start_time))
-                scheduler.step(obj_val, i)
-                if obj_val > prev_val and self.early_abort:
-                    log(fh, '\t\t\tAborted search because stuck')
-                    break
-                prev_val =  obj_val
-                start_time = time.time()
+        for b_step in xrange(self.binary_search_steps):
+            # TODO reset optimizer parameters
 
+            best_dists = [1e10] * batch_size
+            best_classes = [-1] * batch_size
+
+            # repeat binary search one more time?
+
+            prev_loss = 1e6
+            for step in xrange(args.n_generator_steps):
+                optimizer.zero_grad()
+                obj, dists, corrupt_ims, logits = self(ins, w, one_hot_targs, model)
+                total_loss = obj.data[0]
+                total_loss.backward()
+                optimizer.step()
+
+                if not (i % (args.n_generator_steps / 10.)) and i:
+                    # TODO logging
+                    log(fh, '\t\t\tobjective: %.3f, avg noise magnitude: %.7f \t(%.3f s)' % \
+                            (total_loss, torch.mean(torch.abs(noise)).data[0], time.time() - start_time))
+
+                    # Check for early abort
+                    if self.early_abort and total_loss > prev_loss*.9999:
+                        log(fh, '\t\t\tAborted search because stuck')
+                        break
+                    prev_loss = total_loss
+                    scheduler.step(obj_val, i)
+
+                # bookkeeping
+                for e, (dist, logit, im) in enumerate(zip(dists, logits, corrupt_ims)):
+                    if not compare(logit, outs[e]): # if not the targeted class, continue
+                        continue
+                    if dist < best_l2[e]: # if smaller noise within the binary search step
+                        best_dists[e] = dist
+                        best_classes[e] = np.argmax(logit)
+                    if dist < overall_best_dists[e]: # if smaller noise overall
+                        overall_best_dists[e] = dist
+                        overall_best_classes[e] = np.argmax(logit)
+                        overall_best_ims[e] = im
+
+            # binary search stuff
+            for e in xrange(batch_size):
+                if compare(best_classes[e], outs[e]) and best_classes[e] != -1: # success; looking for lower c
+                    upper_bounds[e] = min(upper_bounds[e], consts[e])
+                    if upper_bounds[e] < 1e9:
+                        consts[e] = (lower_bounds[e] + upper_bounds[e]) / 2
+                else: # failure, search with greater c
+                    lower_bound[e] = max(lower_bound[e], consts[e])
+                    if upper_bound[e] < 1e9:
+                        consts[e] = (lower_bounds[e] + upper_bounds[e]) / 2
+                    else:
+                        consts[e] *= 10
+
+        noise = overall_best_ims - .5*torch.tanh(ins) #.5*(torch.tanh(w + ins) - torch.tanh(ins))
         return noise.data.cpu().numpy()
