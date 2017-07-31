@@ -9,10 +9,11 @@
 #SBATCH --mail-type=end
 #SBATCH --mail-user=alexwang@college.harvard.edu
 
-EXP_NAME="facescrub_openface"
-EXP_DIR="/n/regal/rush_lab/awang/data/facescrub_pytorch"
+EXP_NAME="imagenet"
+EXP_DIR="/n/regal/rush_lab/awang/processed_data/imagenet_test"
 MODEL_ACTION="load_model_from"
-MODEL_PATH="src/checkpoints/07-27/$EXP_NAME.ckpt"
+#MODEL_PATH="src/checkpoints/07-27/$EXP_NAME.ckpt"
+MODEL_PATH="/n/regal/rush_lab/awang/models/resnet152.ckpt"
 
 DATE="$(date +%m-%d)"
 LOG_PATH="src/logs/$DATE"
@@ -23,25 +24,26 @@ mkdir -p $OUT_PATH
 mkdir -p $CKPT_PATH
 TRAIN_NEW=${1:-"0"}
 
-MODEL=openface
+MODEL=resnet
 N_MODULES=7
 N_KERNELS=128
 INIT_SCALE=.1
 
+TRAIN=1
 OPTIMIZER=adagrad
-N_EPOCHS=50
-LR=1.
+N_EPOCHS=0
+LR=.1
 MOMENTUM=.9
 WEIGHT_DECAY=.0002
 NESTEROV=true
 BATCH_SIZE=50
 
-GENERATE=0
+GENERATE=1
 GENERATOR=carlini_l2
-TARGET='next_likely'
-GEN_EPS=.1
+TARGET='least'
+GEN_EPS=.75
 GEN_ALPHA=0.0
-GEN_OPT_CONST=10000.
+GEN_INIT_OPT_CONST=10000.
 
 GEN_OPTIMIZER=adam
 N_GEN_STEPS=5000
@@ -55,7 +57,7 @@ if [ ! -f "$MODEL_PATH" ] || [ $TRAIN_NEW -eq "1" ]; then
 else
     # Load a saved model
     echo "Loading a model"
-    N_EPOCHS=0
+    TRAIN=0
 fi
-CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/${EXP_NAME}.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL_ACTION $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LR --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps $N_GEN_STEPS --target $TARGET --generator_optimizer $GEN_OPTIMIZER --generator_lr $GEN_LR --generator_opt_const $GEN_OPT_CONST --model $MODEL --generate $GENERATE"
+CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/${EXP_NAME}.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL_ACTION $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LR --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps $N_GEN_STEPS --target $TARGET --generator_optimizer $GEN_OPTIMIZER --generator_lr $GEN_LR --generator_init_opt_const $GEN_INIT_OPT_CONST --model $MODEL --generate $GENERATE --train $TRAIN"
 eval $CMD

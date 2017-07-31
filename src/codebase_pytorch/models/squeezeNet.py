@@ -13,9 +13,7 @@ from src.codebase_pytorch.utils.hooks import print_outputs, print_grads
 from src.codebase_pytorch.utils.scheduler import ReduceLROnPlateau
 from src.codebase_pytorch.utils.scheduler import LambdaLR
 
-
 __all__ = ['SqueezeNet', 'squeezenet1_0', 'squeezenet1_1']
-
 
 model_urls = {
     'squeezenet1_0': 'https://download.pytorch.org/models/squeezenet1_0-a815701f.pth',
@@ -48,13 +46,14 @@ class Fire(nn.Module):
 
 class SqueezeNet(nn.Module):
 
-    def __init__(self, version=1.0, n_classes=1000, use_cuda=0):
+    def __init__(self, version=1.0, num_classes=1000, use_cuda=0):
         super(SqueezeNet, self).__init__()
         if version not in [1.0, 1.1]:
             raise ValueError("Unsupported SqueezeNet version {version}:"
                              "1.0 or 1.1 expected".format(version=version))
+        self.num_classes = num_classes
         self.use_cuda = use_cuda
-        self.n_classes = n_classes
+
         if version == 1.0:
             self.features = nn.Sequential(
                 nn.Conv2d(3, 96, kernel_size=7, stride=2),
@@ -88,17 +87,17 @@ class SqueezeNet(nn.Module):
                 Fire(512, 64, 256, 256),
             )
         # Final convolution is initialized differently form the rest
-        self.final_conv = nn.Conv2d(512, self.n_classes, kernel_size=1)
+        final_conv = nn.Conv2d(512, self.num_classes, kernel_size=1)
         self.classifier = nn.Sequential(
             nn.Dropout(p=0.5),
-            self.final_conv,
+            final_conv,
             nn.ReLU(inplace=True),
             nn.AvgPool2d(13)
         )
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                if m is self.final_conv:
+                if m is final_conv:
                     init.normal(m.weight.data, mean=0.0, std=0.01)
                 else:
                     init.kaiming_uniform(m.weight.data)
@@ -108,7 +107,7 @@ class SqueezeNet(nn.Module):
     def forward(self, x):
         x = self.features(x)
         x = self.classifier(x)
-        return x.view(x.size(0), self.n_classes)
+        return x.view(x.size(0), self.num_classes)
 
     def train_model(self, args, tr_data, val_data, fh):
         '''
@@ -116,7 +115,6 @@ class SqueezeNet(nn.Module):
         '''
         self.train()
         lr = args.lr
-        pdb.set_trace()
         if args.optimizer == 'sgd':
             optimizer = optim.SGD(self.parameters(), lr=lr, momentum=args.momentum, weight_decay=args.weight_decay)
             log(fh, "\tOptimizing with SGD with learning rate %.3f" % lr)
@@ -129,16 +127,13 @@ class SqueezeNet(nn.Module):
             log(fh, "\tOptimizing with adagrad with learning rate %.3f" % lr)
         else:
             raise NotImplementedError
-        #scheduler = ReduceLROnPlateau(optimizer, 
-        #        'max', factor=.5, patience=3, epsilon=1e-1)
-        lr_lambda = lambda epoch: (1 - float(epoch) / args.n_epochs)
-        scheduler = LambdaLR(optimizer, lr_lambda)
+        scheduler = ReduceLROnPlateau(optimizer, 
+                'max', factor=.5, patience=3, threshold=1e-1)
+        #lr_lambda = lambda epoch: (1 - float(epoch) / args.n_epochs)
+        #scheduler = LambdaLR(optimizer, lr_lambda)
 
         if args.load_model_from:
             self.load_state_dict(torch.load(args.load_model_from))
-
-        self.final_conv.register_forward_hook(print_outputs)
-        self.final_conv.register_backward_hook(print_grads)
 
         start_time = time.time()
         val_loss, val_acc = self.evaluate(val_data)

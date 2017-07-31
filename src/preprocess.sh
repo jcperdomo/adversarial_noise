@@ -12,6 +12,6 @@
 #python codebase/utils/process_lfw.py --data_path data/raw/lfw/lfw-deepfunneled --save_data_to data/raw/lfw/lfw-deepfunneled.hdf5 --out_path data/lfw_test --resize 64
 #python codebase/utils/process_lfw.py --load_data_from data/raw/lfw/lfw-deepfunneled.hdf5 --out_path data/lfw_test --resize 64
 
-python src/codebase/utils/process_facescrub.py --data_path /n/regal/rush_lab/awang/facescrub/dim128/ --out_path /n/regal/rush_lab/awang/data/facescrub_pytorch/ --save_data_to /n/regal/rush_lab/awang/facescrub/dim128_n100.hdf5 --normalize 0 --n_classes 100
-#python src/codebase/utils/process_facescrub.py --out_path /n/regal/rush_lab/awang/data/facescrub_pytorch/ --load_data_from /n/regal/rush_lab/awang/facescrub/dim128.hdf5
-#python src/codebase_pytorch/utils/process_facescrub.py --data_path /n/regal/rush_lab/awang/facescrub/raw/ --out_path /n/regal/rush_lab/awang/data/facescrub_full/ --save_data_to /n/regal/rush_lab/awang/facescrub/dim220_n50.hdf5 --n_classes 100 --im_size 220 --n_channels 3 --normalize 1
+#python src/codebase/utils/process_facescrub.py --data_path /n/regal/rush_lab/awang/facescrub/dim128/ --out_path /n/regal/rush_lab/awang/data/facescrub_pytorch/ --save_data_to /n/regal/rush_lab/awang/facescrub/dim128_n100.hdf5 --normalize 0 --n_classes 100
+#python src/codebase/utils/process_facescrub.py --out_path /n/regal/rush_lab/awang/data/facescrub_pytorch/ --load_data_from /n/regal/rush_lab/awang/facescrub/dim128_n100.hdf5 --normalize 0 --n_classes 100
+python src/codebase_pytorch/utils/process_facescrub.py --data_path /n/regal/rush_lab/awang/facescrub/raw/ --out_path /n/regal/rush_lab/awang/data/facescrub_full/ --save_data_to /n/regal/rush_lab/awang/facescrub/dim224_n50.hdf5 --n_classes 50 --im_size 224 --n_channels 3 --normalize 1

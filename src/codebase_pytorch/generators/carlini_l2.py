@@ -63,6 +63,7 @@ class CarliniL2Generator(nn.Module):
 
         TODO
             - handle non batch_size inputs (smaller and larger)
+            - in converting to tanh space, seems to expect values in (-1, 1)
         '''
 
         def compare(x, y):
@@ -113,11 +114,11 @@ class CarliniL2Generator(nn.Module):
             raise NotImplementedError
         scheduler = ReduceLROnPlateau(optimizer, 'min', factor=.5, patience=3, threshold=1e-3)
 
-        lower_bounds = np.zeroes(batch_size)
+        lower_bounds = np.zeros(batch_size)
         upper_bounds = np.ones(batch_size)
         opt_consts = np.ones(batch_size) * self.init_const
 
-        overall_best_ims = np.zeroes(data.ins.size())
+        overall_best_ims = np.zeros(data.ins.size())
         overall_best_dists = [1e10] * batch_size
         overall_best_classes = [-1] * batch_size # class of the corresponding best im, doesn't seem totally necessary to track
 

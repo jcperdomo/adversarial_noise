@@ -50,19 +50,15 @@ def load_im(path):
     '''
     try:
         im = Image.open(path)
-        return np.array(im, dtype=np.float32) / 255.
+        return np.array(im, dtype=np.float32) #/ 255.
     except IOError as e:
         print "\tUnable to open %s" % path
 
 def augment(ins, outs):
     return ins, outs
 
-def create_dataset(ins, outs, split, shard=None):
-    if shard is not None:
-        path_name = args.out_path + split + "_" + shard + ".hdf5"
-    else:
-        path_name = args.out_path + split + ".hdf5"
-    with h5py.File(path_name) as f:
+def create_dataset(ins, outs, split):
+    with h5py.File(args.out_path + split + ".hdf5", 'w') as f:
         f['ins'] = ins
         f['outs'] = outs
 
@@ -75,7 +71,6 @@ def main(arguments):
     parser.add_argument('--load_data_from', help='optional path to hdf5 file containing loaded data', type=str, default='')
     parser.add_argument('--save_data_to', help='optional path to save hdf5 file containing loaded data', type=str, default='')
     parser.add_argument('--out_path', help='path to folder to contain output files', type=str, default='')
-    parser.add_argument('--n_tr_shards', help='number of shards to splits training data into', type=int, default=1)
 
     parser.add_argument('--normalize', help='1 if normalize', type=int, default=0)
 
@@ -147,15 +142,13 @@ def main(arguments):
     if args.out_path[-1] != '/':
         args.out_path += '/'
     print 'Creating data...'
-    for i in xrange(args.n_tr_shards):
-        create_dataset(tr_ins, tr_outs, "tr", i)
+    create_dataset(tr_ins, tr_outs, "tr")
     print '\tFinished training data'
     create_dataset(val_ins, val_outs, "val")
     print '\tFinished validation data'
     create_dataset(te_ins, te_outs, "te")
     print '\tFinished test data'
     with h5py.File(args.out_path + "params.hdf5", 'w') as f:
-        f['n_shards'] = np.array([n_shards], dtype=np.int32)
         f['n_classes'] = np.array([n_classes], dtype=np.int32)
         f['n_channels'] = np.array([args.n_channels], dtype=np.int32)
         f['im_size'] = np.array([args.im_size], dtype=np.int32)

@@ -137,7 +137,7 @@ class Inception(nn.Module):
         return output
 
 
-class openFace(nn.Module):
+class OpenFace(nn.Module):
     def __init__(self, args):
         super(openFace, self).__init__()
         self.use_cuda = not args.no_cuda
