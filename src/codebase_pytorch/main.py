@@ -84,7 +84,8 @@ def main(arguments):
     # Carlini and Wagner options
     parser.add_argument("--generator_init_opt_const", help="Optimization constant for Carlini generator", type=float, default=.1)
     parser.add_argument("--generator_confidence", help="Confidence in obfuscated image for Carlini generator", type=float, default=0.)
-    parser.add_argument("--n_binary_search_steps", help="Number of steps in binary search for optimal c", type=float, default=5)
+    parser.add_argument("--early_abort", help="1 if should abort if not making progress", type=int, default=0)
+    parser.add_argument("--n_binary_search_steps", help="Number of steps in binary search for optimal c", type=int, default=5)
 
     args = parser.parse_args(arguments)
 
@@ -152,14 +153,14 @@ def main(arguments):
         log(log_fh, "Generating noise for images...")
         with h5py.File(args.im_file, 'r') as fh:
             te_data = Dataset(fh['ins'][:], fh['outs'][:], args)
-        log(log_fh, "\tLoaded images!")
+        log(log_fh, "\tLoaded %d images!" % te_data.ins.size()[0])
 
         # Create the noise generator
         if args.generator == 'random':
             generator = RandomNoiseGenerator(args)
             log(log_fh, "\tBuilt random generator with eps %.3f" % args.eps)
         elif args.generator == 'carlini_l2':
-            generator = CarliniL2Generator(args, te_data.n_ins)
+            generator = CarliniL2Generator(args, (mean, std))
             log(log_fh, "\tBuilt C&W generator")
         elif args.generator == 'fgsm':
             generator = FGSMGenerator(args)

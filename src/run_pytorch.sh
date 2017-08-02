@@ -40,14 +40,17 @@ BATCH_SIZE=50
 
 GENERATE=1
 GENERATOR=carlini_l2
-TARGET='least'
+N_GEN_STEPS=10
+
+TARGET='none'
+
 GEN_EPS=.75
 GEN_ALPHA=0.0
-GEN_INIT_OPT_CONST=10000.
 
+GEN_INIT_OPT_CONST=100.
 GEN_OPTIMIZER=adam
-N_GEN_STEPS=5000
 GEN_LR=.01
+N_BINARY_SEARCH_STEPS=1
 
 if [ ! -f "$MODEL_PATH" ] || [ $TRAIN_NEW -eq "1" ]; then
     # Train a good model and save it
@@ -59,5 +62,5 @@ else
     echo "Loading a model"
     TRAIN=0
 fi
-CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/${EXP_NAME}.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL_ACTION $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LR --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps $N_GEN_STEPS --target $TARGET --generator_optimizer $GEN_OPTIMIZER --generator_lr $GEN_LR --generator_init_opt_const $GEN_INIT_OPT_CONST --model $MODEL --generate $GENERATE --train $TRAIN"
+CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/${EXP_NAME}.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL_ACTION $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LR --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps $N_GEN_STEPS --target $TARGET --generator_optimizer $GEN_OPTIMIZER --generator_lr $GEN_LR --generator_init_opt_const $GEN_INIT_OPT_CONST --model $MODEL --generate $GENERATE --train $TRAIN --n_binary_search_steps $N_BINARY_SEARCH_STEPS"
 eval $CMD
