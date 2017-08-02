@@ -35,7 +35,7 @@ class CarliniL2Generator(nn.Module):
         self.mean = normalize[0]
         self.std = normalize[1]
 
-    def forward(self, tanh_x, x, w, c, labels, model):
+    def forward(self, tanh_x, x, w, c, labels, model, mean=None, std=None):
         '''
         Function to optimize
             - Labels should be one-hot
@@ -44,8 +44,8 @@ class CarliniL2Generator(nn.Module):
         '''
         corrupt_im = .5 * (F.tanh(w + tanh_x) + 1) # puts into [0,1]
         input_im = corrupt_im
-        if self.mean is not None: # if model expects normalized input
-            input_im = (corrupt_im - self.mean) / self.std # TODO types
+        if mean is not None: # if model expects normalized input
+            input_im = (corrupt_im - mean) / std
         logits = model(input_im)
         target_logit = torch.sum(logits * labels, dim=1)
         second_logit = torch.max(logits*(1.-labels)-(labels*10000), dim=1)[0]
@@ -78,19 +78,9 @@ class CarliniL2Generator(nn.Module):
             Check if predicted class is target class
                 or not targeted class if untargeted
             '''
-            if not isinstance(x, (float, int, np.int32)):
-                x = np.copy(x)
-                x[y] += self.k # confidence
-                x = np.argmax(x)
-                print "fuck fuck fuck I have to convert shit"
-            if self.targeted:
-                return x == y
-            else:
-                return x != y
+            return x == y if self.targeted else x != y
 
         if isinstance(data, tuple):
-            #ins = torch.FloatTensor(data[0]) if not isinstance(data[0], torch.FloatTensor) else data[0]
-            #outs = torch.LongTensor(data[1]) if not isinstance(data[1], torch.LongTensor) else data[1]
             ins = ins.numpy() if isinstance(data[0], torch.FloatTensor) else data[0]
             outs = outs.numpy() if not isinstance(data[1], np.ndarray) else data[1]
         elif isinstance(data, Dataset):
@@ -117,17 +107,16 @@ class CarliniL2Generator(nn.Module):
 
         batch_size = self.batch_size
         lower_bounds = np.zeros(batch_size)
-        upper_bounds = np.ones(batch_size)
+        upper_bounds = np.ones(batch_size) * 1e10
         opt_consts = torch.ones((batch_size,1)) * self.init_const
 
         overall_best_ims = np.zeros(ins.size())
         overall_best_dists = [1e10] * batch_size
-        overall_best_classes = [-1] * batch_size # class of the corresponding best im, doesn't seem totally necessary to track
+        overall_best_classes = [-1] * batch_size
 
         # variable to optimize
         w = torch.zeros(ins.size())
 
-        inputs = [tanh_ins, ins, one_hot_targs, w, opt_consts]
         if self.use_cuda:
             tanh_ins, ins, one_hot_targs, w, opt_consts = \
                 tanh_ins.cuda(), ins.cuda(), one_hot_targs.cuda(), \
@@ -137,14 +126,14 @@ class CarliniL2Generator(nn.Module):
             Variable(w, requires_grad=True), Variable(opt_consts)
 
         if self.mean is not None:
-            # This kind of makes the generator unusable after the first time
-            # which won't work for the demo
-            self.mean = torch.FloatTensor(self.mean)
-            self.std = torch.FloatTensor(self.std)
+            mean = torch.FloatTensor(self.mean)
+            std = torch.FloatTensor(self.std)
             if self.use_cuda:
-                self.mean, self.std = self.mean.cuda(), self.std.cuda()
-            self.mean = Variable(self.mean.expand_as(ins))
-            self.std = Variable(self.std.expand_as(ins))
+                mean, std = mean.cuda(), std.cuda()
+            mean = Variable(mean.expand_as(ins))
+            std = Variable(std.expand_as(ins))
+        else:
+            mean, std = None, None
 
         start_time = time.time()
         for b_step in xrange(self.binary_search_steps):
@@ -170,8 +159,9 @@ class CarliniL2Generator(nn.Module):
             prev_loss = 1e6
             for step in xrange(args.n_generator_steps):
                 optimizer.zero_grad()
-                obj, dists, corrupt_ims, logits = \
-                    self(tanh_ins, ins, w, opt_consts, one_hot_targs, model)
+                obj, dists, corrupt_ims, logits, = \
+                    self(tanh_ins, ins, w, opt_consts, \
+                        one_hot_targs, model, mean, std)
                 total_loss = obj.data[0]
                 obj.backward()
                 optimizer.step()
@@ -193,6 +183,7 @@ class CarliniL2Generator(nn.Module):
 
                 # bookkeeping
                 for e, (dist, logit, im) in enumerate(zip(dists, logits, corrupt_ims)):
+                    #logit[outs[e]] += self.k
                     pred = np.argmax(logit.data.cpu().numpy())
                     if not compare(pred, outs[e]): # if not the targeted class, continue
                         continue
@@ -222,6 +213,6 @@ class CarliniL2Generator(nn.Module):
                     else:
                         opt_consts.data[e][0] *= 10
 
-        #noise = overall_best_ims - .5*torch.tanh(ins)
-        noise = overall_best_ims - ins.data.cpu().numpy()
-        return noise#.data.cpu().numpy()
+        if self.mean is not None:
+            overall_best_ims = (overall_best_ims - self.mean) / self.std
+        return overall_best_ims

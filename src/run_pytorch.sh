@@ -41,7 +41,6 @@ BATCH_SIZE=50
 GENERATE=1
 GENERATOR=carlini_l2
 N_GEN_STEPS=10
-
 TARGET='none'
 
 GEN_EPS=.75
@@ -50,7 +49,7 @@ GEN_ALPHA=0.0
 GEN_INIT_OPT_CONST=100.
 GEN_OPTIMIZER=adam
 GEN_LR=.01
-N_BINARY_SEARCH_STEPS=1
+N_BINARY_SEARCH_STEPS=5
 
 if [ ! -f "$MODEL_PATH" ] || [ $TRAIN_NEW -eq "1" ]; then
     # Train a good model and save it

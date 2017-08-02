@@ -131,6 +131,7 @@ def main(arguments):
         raise NotImplementedError
     if args.cuda:
         model.cuda()
+    model.eval()
     log(log_fh, "Done!")
 
     # Optional load model
@@ -152,8 +153,9 @@ def main(arguments):
         # Load images to obfuscate
         log(log_fh, "Generating noise for images...")
         with h5py.File(args.im_file, 'r') as fh:
+            clean_ims = fh['ins'][:]
             te_data = Dataset(fh['ins'][:], fh['outs'][:], args)
-        log(log_fh, "\tLoaded %d images!" % te_data.ins.size()[0])
+        log(log_fh, "\tLoaded %d images!" % clean_ims.shape[0])
 
         # Create the noise generator
         if args.generator == 'random':
@@ -170,12 +172,12 @@ def main(arguments):
 
         # Choose a class to target
         if args.target == 'random':
-            data = Dataset(te_data.ins, np.random.randint(args.n_classes, size=te_data.n_ins), args)
+            data = Dataset(clean_ims, np.random.randint(args.n_classes, size=te_data.n_ins), args)
             log(log_fh, "\t\ttargeting random class")
         elif args.target == 'least':
             preds = model.predict(te_data)
             targs = np.argmin(preds, axis=1)
-            data = Dataset(te_data.ins.numpy(), targs, args)
+            data = Dataset(clean_ims, targs, args)
             log(log_fh, "\t\ttargeting least likely class")
             target_s = 'least likely'
         elif args.target == 'next_likely':
@@ -183,26 +185,27 @@ def main(arguments):
             one_hot = np.zeros((te_data.n_ins, args.n_classes))
             one_hot[np.arange(te_data.n_ins), te_data.outs.numpy().astype(int)] = 1
             targs = np.argmax(preds * (1. - one_hot), axis=1)
-            data = Dataset(te_data.ins.numpy(), targs, args)
+            data = Dataset(clean_ims, targs, args)
             log(log_fh, "\t\ttargeting next likely class")
         elif args.target == 'none':
-            data = te_data
+            data = Dataset(clean_ims, te_data.outs.numpy().copy(), args)
             log(log_fh, "\t\ttargeting no class")
         else:
             raise NotImplementedError
 
-        # Generate the noise
+        # Generate the corrupt images
         # NB: noise will be in the input space,
         #     which is not necessarily a valid image
-        noise = generator.generate(data, model, args, log_fh)
+        corrupt_ims = generator.generate(data, model, args, log_fh)
         log(log_fh, "Done!")
 
         # Compute the corruption rate
         log(log_fh, "Computing corruption rate...")
-        corrupt_data = Dataset(te_data.ins.numpy() + noise, te_data.outs, args)
+        corrupt_data = Dataset(corrupt_ims, te_data.outs, args)
+        target_data = Dataset(corrupt_ims, data.outs, args)
         _, clean_top1, clean_top5 = model.evaluate(te_data)
         _, corrupt_top1, corrupt_top5 = model.evaluate(corrupt_data)
-        _, target_top1, target_top5 = model.evaluate(data)
+        _, target_top1, target_top5 = model.evaluate(target_data)
         log(log_fh, "\tClean top 1 accuracy: %.3f \ttop 5 accuracy: %.3f" %
                 (clean_top1, clean_top5))
         log(log_fh, "\tCorrupt top 1 accuracy: %.3f \ttop 5 accuracy: %.3f" %
@@ -210,17 +213,19 @@ def main(arguments):
         log(log_fh, "\tTarget top 1 accuracy: %.3f \ttop 5 accuracy: %.3f" %
                 (target_top1, target_top5))
 
-        clean_ims = te_data.ins.numpy()
-        corrupt_ims = corrupt_data.ins.numpy()
         # De-normalize
         if mean is not None:
             # dumb imagenet stuff
             mean = np.array([.485, .456, .406])[..., np.newaxis, np.newaxis]
             std = np.array([.229, .224, .225])[..., np.newaxis, np.newaxis]
             for i in xrange(clean_ims.shape[0]):
-                # TODO handle out of range pixels
+                # TODO handle out of range pixels better
                 clean_ims[i] = (clean_ims[i] - mean) / std
+                clean_ims[i] = clean_ims[i] - clean_ims[i].min()
+                clean_ims[i] = clean_ims[i] / clean_ims[i].max()
                 corrupt_ims[i] = (corrupt_ims[i] - mean) / std
+                corrupt_ims[i] = corrupt_ims[i] - corrupt_ims[i].min()
+                corrupt_ims[i] = corrupt_ims[i] / corrupt_ims[i].max()
         noise = corrupt_ims - clean_ims
 
         # Save noise and images

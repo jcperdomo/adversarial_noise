@@ -24,6 +24,8 @@ class FGSMGenerator():
         '''
         Generate adversarial noise using fast gradient method.
 
+        TODO: generators should return the adversarial images now
+
         inputs:
             - images: n_images x im_size x im_size x n_channels
             - model: a model class
