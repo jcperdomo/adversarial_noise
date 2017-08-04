@@ -17,13 +17,17 @@ from src.codebase_pytorch.models.ModularCNN import ModularCNN
 from src.codebase_pytorch.models.mnistCNN import MNISTCNN
 from src.codebase_pytorch.models.squeezeNet import SqueezeNet
 from src.codebase_pytorch.models.openFace import openFaceClassifier
-from src.codebase_pytorch.models.resnet import ResNet, Bottleneck
+from src.codebase_pytorch.models.resnet import ResNet, Bottleneck, resnet152
 from src.codebase_pytorch.models.inception import Inception3
+from src.codebase_pytorch.models.densenet import DenseNet, densenet161
+from src.codebase_pytorch.models.vgg import vgg19_bn
+from src.codebase_pytorch.models.alexnet import AlexNet, alexnet
 
 # Generators
 from src.codebase_pytorch.generators.random import RandomNoiseGenerator
 from src.codebase_pytorch.generators.fgsm import FGSMGenerator
 from src.codebase_pytorch.generators.carlini_l2 import CarliniL2Generator
+from src.codebase_pytorch.generators.ensembler import EnsembleGenerator
 
 def main(arguments):
     '''
@@ -122,16 +126,26 @@ def main(arguments):
         model = OpenFaceClassifier(args)
         log(log_fh, "\tBuilt OpenFaceClassifier")
     elif args.model == 'resnet':
-        model = ResNet(Bottleneck, [3, 8, 36, 3], 1000, args)
-        log(log_fh, "\tBuilt ResNet")
+        model = ResNet(Bottleneck, [3, 8, 36, 3])
+        log(log_fh, "\tBuilt ResNet152")
     elif args.model == 'inception':
-        model = Inception(args)
+        model = Inception3(num_classes=args.n_classes)
         log(log_fh, "\tBuilt Inception")
+    elif args.model == 'densenet':
+        model = DenseNet(num_init_features=96, growth_rate=48, block_config=(6, 12, 36, 24), **kwargs)
+        log(log_fh, "\tBuilt DenseNet161")
+    elif args.model == 'alexnet':
+        model = AlexNet()
+        log(log_fh, "\tBuilt AlexNet")
+    elif args.model == 'vgg':
+        model = vgg19_bn(pretrained=True)
+        log(log_fh, "\tBuilt VGG19bn")
+
     else:
         raise NotImplementedError
     if args.cuda:
         model.cuda()
-    model.eval()
+    model.eval() # this should be redundant now
     log(log_fh, "Done!")
 
     # Optional load model
@@ -140,12 +154,18 @@ def main(arguments):
         log(log_fh, "Loaded weights from %s" % args.load_model_from)
 
     # Train
+    with h5py.File(args.data_path + 'val.hdf5', 'r') as fh:
+        val_data = Dataset(fh['ins'][:], fh['outs'][:], args)
     if args.train:
         log(log_fh, "Training...")
-        tr_path = args.data_path + 'tr.hdf5'
-        val_path = args.data_path + 'val.hdf5'
-        model.train_model(args, tr_path, val_path, log_fh)
+        with h5py.File(args.data_path + 'tr.hdf5', 'r') as fh:
+            tr_data = Dataset(fh['ins'][:], fh['outs'][:], args)
+        model.train_model(args, tr_data, val_data, log_fh)
         log(log_fh, "Done!")
+        del tr_data
+    _, val_acc, val_top5 = model.evaluate(val_data)
+    log(log_fh, "\tBest top1 validation accuracy: %.2f \tBest top5 acc: %.2f" % (val_acc, val_top5))
+    del val_data
 
     if args.generate:
         assert args.im_file
@@ -167,6 +187,23 @@ def main(arguments):
         elif args.generator == 'fgsm':
             generator = FGSMGenerator(args)
             log(log_fh, "\tBuilt fgsm generator with eps %.3f" % args.eps)
+        elif args.generator == 'ensemble':
+            # build a shit ton of models
+            old_model = model
+            resnet = resnet152(pretrained=True)
+            densenet = densenet161(pretrained=True)
+            alex = alexnet(pretrained=True)
+            vgg = vgg19_bn(pretrained=True)
+            if args.cuda:
+                resnet = resnet.cuda()
+                densenet = densenet.cuda()
+                alex = alex.cuda()
+                vgg = vgg.cuda()
+            model = [resnet, densenet, alex, vgg]
+
+            # build the generator
+            generator = EnsembleGenerator(args, (mean, std))
+            log(log_fh, "\tBuild ensemble optimization generator with ResNet, Densenet, AlexNet, and VGG")
         else:
             raise NotImplementedError
 
@@ -199,6 +236,10 @@ def main(arguments):
         corrupt_ims = generator.generate(data, model, args, log_fh)
         log(log_fh, "Done!")
 
+        if args.generator == 'ensemble':
+            del model
+            model = old_model
+
         # Compute the corruption rate
         log(log_fh, "Computing corruption rate...")
         corrupt_data = Dataset(corrupt_ims, te_data.outs, args)
@@ -213,22 +254,31 @@ def main(arguments):
         log(log_fh, "\tTarget top 1 accuracy: %.3f \ttop 5 accuracy: %.3f" %
                 (target_top1, target_top5))
 
-        # De-normalize
+        # De-normalize to [0,1]^d
         if mean is not None:
             # dumb imagenet stuff
             mean = np.array([.485, .456, .406])[..., np.newaxis, np.newaxis]
             std = np.array([.229, .224, .225])[..., np.newaxis, np.newaxis]
             for i in xrange(clean_ims.shape[0]):
-                # TODO handle out of range pixels better
-                clean_ims[i] = (clean_ims[i] - mean) / std
+                clean_ims[i] = (clean_ims[i] * std) + mean
+                corrupt_ims[i] = (corrupt_ims[i] * std) + mean
+
+        # TODO handle out of range pixels?
+        '''
+        for i in xrange(clean_ims.shape[0]):
+            if clean_ims[i].min() < 0:
                 clean_ims[i] = clean_ims[i] - clean_ims[i].min()
+            if clean_ims[i].max() > 1:
                 clean_ims[i] = clean_ims[i] / clean_ims[i].max()
-                corrupt_ims[i] = (corrupt_ims[i] - mean) / std
+            if corrupt_ims[i].min() < 0:
                 corrupt_ims[i] = corrupt_ims[i] - corrupt_ims[i].min()
+            if corrupt_ims[i].max() > 1:
                 corrupt_ims[i] = corrupt_ims[i] / corrupt_ims[i].max()
+        '''
+
         noise = corrupt_ims - clean_ims
 
-        # Save noise and images
+        # Save noise and images in ~[0,1] scale
         if args.out_file:
             with h5py.File(args.out_file, 'w') as fh:
                 fh['noise'] = noise
@@ -237,9 +287,12 @@ def main(arguments):
             log(log_fh, "Saved image and noise data to %s" % args.out_file)
 
         if args.out_path:
+            clean_ims = (clean_ims * 255.).astype(np.uint8)
+            corrupt_ims = (corrupt_ims * 255.).astype(np.uint8)
+
             for i, (clean, corrupt) in enumerate(zip(clean_ims, corrupt_ims)):
-                imsave("%s/%d_clean.png" % (args.out_path, i), np.squeeze(clean))
-                imsave("%s/%d_corrupt.png" % (args.out_path, i),
+                imsave("%s/%03d_clean.png" % (args.out_path, i), np.squeeze(clean))
+                imsave("%s/%03d_corrupt.png" % (args.out_path, i),
                     np.squeeze(corrupt))
             log(log_fh, "Saved images to %s" % args.out_path)
 

@@ -11,10 +11,6 @@
 
 EXP_NAME="imagenet"
 EXP_DIR="/n/regal/rush_lab/awang/processed_data/imagenet_test"
-MODEL_ACTION="load_model_from"
-#MODEL_PATH="src/checkpoints/07-27/$EXP_NAME.ckpt"
-MODEL_PATH="/n/regal/rush_lab/awang/models/resnet152.ckpt"
-
 DATE="$(date +%m-%d)"
 LOG_PATH="src/logs/$DATE"
 OUT_PATH="src/outs/$DATE/${EXP_NAME}"
@@ -22,14 +18,19 @@ CKPT_PATH="src/checkpoints/$DATE"
 mkdir -p $LOG_PATH
 mkdir -p $OUT_PATH
 mkdir -p $CKPT_PATH
+
 TRAIN_NEW=${1:-"0"}
+MODEL_ACTION="load_model_from"
+#MODEL_PATH="src/checkpoints/07-27/$EXP_NAME.ckpt"
+MODEL_PATH="/n/regal/rush_lab/awang/models/resnet152.ckpt"
 
 MODEL=resnet
+
 N_MODULES=7
 N_KERNELS=128
 INIT_SCALE=.1
 
-TRAIN=1
+TRAIN=0
 OPTIMIZER=adagrad
 N_EPOCHS=0
 LR=.1
@@ -39,17 +40,17 @@ NESTEROV=true
 BATCH_SIZE=50
 
 GENERATE=1
-GENERATOR=carlini_l2
-N_GEN_STEPS=10
+GENERATOR=ensemble
+N_GEN_STEPS=100
 TARGET='none'
 
 GEN_EPS=.75
 GEN_ALPHA=0.0
 
-GEN_INIT_OPT_CONST=100.
+GEN_INIT_OPT_CONST=10
 GEN_OPTIMIZER=adam
 GEN_LR=.01
-N_BINARY_SEARCH_STEPS=5
+N_BINARY_SEARCH_STEPS=3
 
 if [ ! -f "$MODEL_PATH" ] || [ $TRAIN_NEW -eq "1" ]; then
     # Train a good model and save it
