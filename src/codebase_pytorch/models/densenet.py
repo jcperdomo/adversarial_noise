@@ -16,7 +16,8 @@ model_urls = {
 }
 
 model_paths = {
-    'densenet161': '/n/regal/rush_lab/awang/models/densenet161.ckpt'
+    'densenet161': '/n/regal/rush_lab/awang/models/densenet161.ckpt',
+    'densenet201': '/n/regal/rush_lab/awang/models/densenet201.ckpt'
 }
 
 def densenet121(pretrained=False, **kwargs):

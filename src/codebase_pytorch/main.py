@@ -15,12 +15,12 @@ from src.codebase_pytorch.utils.hooks import print_outputs, print_grads
 # Classifiers
 from src.codebase_pytorch.models.ModularCNN import ModularCNN
 from src.codebase_pytorch.models.mnistCNN import MNISTCNN
-from src.codebase_pytorch.models.squeezeNet import SqueezeNet
+from src.codebase_pytorch.models.squeezeNet import SqueezeNet, squeezenet1_1
 from src.codebase_pytorch.models.openFace import openFaceClassifier
-from src.codebase_pytorch.models.resnet import ResNet, Bottleneck, resnet152
+from src.codebase_pytorch.models.resnet import ResNet, Bottleneck, resnet152, resnet101
 from src.codebase_pytorch.models.inception import Inception3
-from src.codebase_pytorch.models.densenet import DenseNet, densenet161
-from src.codebase_pytorch.models.vgg import vgg19_bn
+from src.codebase_pytorch.models.densenet import DenseNet, densenet161, densenet201
+from src.codebase_pytorch.models.vgg import vgg19_bn, vgg19
 from src.codebase_pytorch.models.alexnet import AlexNet, alexnet
 
 # Generators
@@ -77,7 +77,7 @@ def main(arguments):
 
     # Generator training options
     parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
-    parser.add_argument("--generator_batch_size", help="Batch size for generator", type=int, default=50)
+    parser.add_argument("--generator_batch_size", help="Batch size for generator", type=int, default=10)
     parser.add_argument("--generator_lr", help="Learning rate for generator optimization when necessary", type=float, default=.1)
     parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
 
@@ -145,7 +145,7 @@ def main(arguments):
         raise NotImplementedError
     if args.cuda:
         model.cuda()
-    model.eval() # this should be redundant now
+    model.eval()
     log(log_fh, "Done!")
 
     # Optional load model
@@ -155,16 +155,18 @@ def main(arguments):
 
     # Train
     with h5py.File(args.data_path + 'val.hdf5', 'r') as fh:
-        val_data = Dataset(fh['ins'][:], fh['outs'][:], args)
+        val_data = Dataset(fh['ins'][:], fh['outs'][:], args.batch_size, args)
     if args.train:
         log(log_fh, "Training...")
         with h5py.File(args.data_path + 'tr.hdf5', 'r') as fh:
-            tr_data = Dataset(fh['ins'][:], fh['outs'][:], args)
+            tr_data = Dataset(fh['ins'][:], fh['outs'][:], 
+                                args.batch_size, args)
         model.train_model(args, tr_data, val_data, log_fh)
         log(log_fh, "Done!")
         del tr_data
     _, val_acc, val_top5 = model.evaluate(val_data)
-    log(log_fh, "\tBest top1 validation accuracy: %.2f \tBest top5 acc: %.2f" % (val_acc, val_top5))
+    log(log_fh, "\tBest top1 validation accuracy: %.2f \tBest top5 acc: %.2f"
+        % (val_acc, val_top5))
     del val_data
 
     if args.generate:
@@ -174,8 +176,35 @@ def main(arguments):
         log(log_fh, "Generating noise for images...")
         with h5py.File(args.im_file, 'r') as fh:
             clean_ims = fh['ins'][:]
-            te_data = Dataset(fh['ins'][:], fh['outs'][:], args)
+            te_data = Dataset(fh['ins'][:], fh['outs'][:], 
+                            args.generator_batch_size, args)
         log(log_fh, "\tLoaded %d images!" % clean_ims.shape[0])
+
+        # Choose a class to target
+        if args.target == 'random':
+            data = Dataset(clean_ims, 
+                np.random.randint(args.n_classes, size=te_data.n_ins), 
+                                args.generator_batch_size, args)
+            log(log_fh, "\t\ttargeting random class")
+        elif args.target == 'least':
+            preds = model.predict(te_data)
+            targs = np.argmin(preds, axis=1)
+            data = Dataset(clean_ims, targs, args.generator_batch_size, args)
+            log(log_fh, "\t\ttargeting least likely class")
+            target_s = 'least likely'
+        elif args.target == 'next_likely':
+            preds = model.predict(te_data)
+            one_hot = np.zeros((te_data.n_ins, args.n_classes))
+            one_hot[np.arange(te_data.n_ins), te_data.outs.numpy().astype(int)] = 1
+            targs = np.argmax(preds * (1. - one_hot), axis=1)
+            data = Dataset(clean_ims, targs, args.generator_batch_size, args)
+            log(log_fh, "\t\ttargeting next likely class")
+        elif args.target == 'none':
+            data = Dataset(clean_ims, te_data.outs.numpy().copy(), 
+                            args.generator_batch_size, args)
+            log(log_fh, "\t\ttargeting no class")
+        else:
+            raise NotImplementedError
 
         # Create the noise generator
         if args.generator == 'random':
@@ -190,43 +219,35 @@ def main(arguments):
         elif args.generator == 'ensemble':
             # build a shit ton of models
             old_model = model
-            resnet = resnet152(pretrained=True)
-            densenet = densenet161(pretrained=True)
-            alex = alexnet(pretrained=True)
+            rn152 = resnet152(pretrained=True)
+            rn101 = resnet101(pretrained=True)
+            dn161 = densenet161(pretrained=True)
+            #dn201 = densenet201(pretrained=True)
+            #alex = alexnet(pretrained=True)
             vgg = vgg19_bn(pretrained=True)
+            squeezenet = squeezenet1_1(pretrained=True)
             if args.cuda:
-                resnet = resnet.cuda()
-                densenet = densenet.cuda()
-                alex = alex.cuda()
+                rn152 = rn152.cuda()
+                rn101 = rn101.cuda()
+                dn161 = dn161.cuda()
+                #dn201 = dn201.cuda()
                 vgg = vgg.cuda()
-            model = [resnet, densenet, alex, vgg]
+                #alex = alex.cuda()
+                squeezenet = squeezenet.cuda()
+            model = [rn152, dn161, \
+                    #dn201,
+                    squeezenet, 
+                    #alex,
+                    vgg,
+                    rn101]
+            args.n_models = len(model)
+            for m in model:
+                m.eval()
 
             # build the generator
             generator = EnsembleGenerator(args, (mean, std))
-            log(log_fh, "\tBuild ensemble optimization generator with ResNet, Densenet, AlexNet, and VGG")
-        else:
-            raise NotImplementedError
-
-        # Choose a class to target
-        if args.target == 'random':
-            data = Dataset(clean_ims, np.random.randint(args.n_classes, size=te_data.n_ins), args)
-            log(log_fh, "\t\ttargeting random class")
-        elif args.target == 'least':
-            preds = model.predict(te_data)
-            targs = np.argmin(preds, axis=1)
-            data = Dataset(clean_ims, targs, args)
-            log(log_fh, "\t\ttargeting least likely class")
-            target_s = 'least likely'
-        elif args.target == 'next_likely':
-            preds = model.predict(te_data)
-            one_hot = np.zeros((te_data.n_ins, args.n_classes))
-            one_hot[np.arange(te_data.n_ins), te_data.outs.numpy().astype(int)] = 1
-            targs = np.argmax(preds * (1. - one_hot), axis=1)
-            data = Dataset(clean_ims, targs, args)
-            log(log_fh, "\t\ttargeting next likely class")
-        elif args.target == 'none':
-            data = Dataset(clean_ims, te_data.outs.numpy().copy(), args)
-            log(log_fh, "\t\ttargeting no class")
+            log(log_fh, ("\tBuilt ensemble optimization generator"))# with "
+                            #"ResNet, DenseNet, AlexNet, and VGG"))
         else:
             raise NotImplementedError
 
@@ -242,8 +263,10 @@ def main(arguments):
 
         # Compute the corruption rate
         log(log_fh, "Computing corruption rate...")
-        corrupt_data = Dataset(corrupt_ims, te_data.outs, args)
-        target_data = Dataset(corrupt_ims, data.outs, args)
+        corrupt_data = Dataset(corrupt_ims, te_data.outs, 
+                                args.batch_size, args)
+        target_data = Dataset(corrupt_ims, data.outs, 
+                                args.batch_size, args)
         _, clean_top1, clean_top5 = model.evaluate(te_data)
         _, corrupt_top1, corrupt_top5 = model.evaluate(corrupt_data)
         _, target_top1, target_top5 = model.evaluate(target_data)

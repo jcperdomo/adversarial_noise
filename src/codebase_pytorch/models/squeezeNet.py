@@ -12,6 +12,7 @@ from src.codebase.utils.utils import log
 from src.codebase_pytorch.utils.hooks import print_outputs, print_grads
 from src.codebase_pytorch.utils.scheduler import ReduceLROnPlateau
 from src.codebase_pytorch.utils.scheduler import LambdaLR
+from src.codebase_pytorch.models.model import Model
 
 __all__ = ['SqueezeNet', 'squeezenet1_0', 'squeezenet1_1']
 
@@ -20,6 +21,10 @@ model_urls = {
     'squeezenet1_1': 'https://download.pytorch.org/models/squeezenet1_1-f364aa15.pth',
 }
 
+model_paths = {
+    'squeezenet1_0': '/n/regal/rush_lab/awang/models/squeezenet_v1_0.ckpt',
+    'squeezenet1_1': '/n/regal/rush_lab/awang/models/squeezenet_v1_1.ckpt'
+}
 
 class Fire(nn.Module):
 
@@ -44,7 +49,7 @@ class Fire(nn.Module):
         ], 1)
 
 
-class SqueezeNet(nn.Module):
+class SqueezeNet(Model):
 
     def __init__(self, version=1.0, num_classes=1000, use_cuda=0):
         super(SqueezeNet, self).__init__()
@@ -240,7 +245,8 @@ def squeezenet1_0(pretrained=False, **kwargs):
     """
     model = SqueezeNet(version=1.0, **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['squeezenet1_0']))
+        #model.load_state_dict(model_zoo.load_url(model_urls['squeezenet1_0']))
+        model.load_state_dict(torch.load(model_paths['squeezenet1_0']))
     return model
 
 
@@ -254,5 +260,6 @@ def squeezenet1_1(pretrained=False, **kwargs):
     """
     model = SqueezeNet(version=1.1, **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['squeezenet1_1']))
+        #model.load_state_dict(model_zoo.load_url(model_urls['squeezenet1_1']))
+        model.load_state_dict(torch.load(model_paths['squeezenet1_1']))
     return model

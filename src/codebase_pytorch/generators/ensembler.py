@@ -27,10 +27,10 @@ class EnsembleGenerator(nn.Module):
         self.binary_search_steps = args.n_binary_search_steps
         self.init_const = args.generator_init_opt_const
         self.early_abort = args.early_abort
-        self.batch_size = 10 #args.generator_batch_size
+        self.batch_size = args.generator_batch_size
         self.mean = normalize[0]
         self.std = normalize[1]
-        self.n_models = 4
+        self.n_models = args.n_models
 
     def forward(self, tanh_x, x, w, c, labels, models, mean=None, std=None):
         '''
@@ -38,13 +38,16 @@ class EnsembleGenerator(nn.Module):
             - Labels should be one-hot
             - tanh_x should be inputs in tanh space
             - x should be images in [0,1]^d (unnormalized)
+
+        TODO: ensemble weights
         '''
-        corrupt_im = .5 * (F.tanh(w + tanh_x) + 1) # puts into [0,1]
+        corrupt_im = .5 * F.tanh(w + tanh_x) + .5 # puts into [0,1]
         input_im = corrupt_im
         if mean is not None: # if model expects normalized input
             input_im = (corrupt_im - mean) / std
         total_class_loss = 0 # will get cast into tensor of correct size
-        pred_dist = 0
+        total_pred_dstrb = 0
+        pred_dstrbs = []
         for model in models:
             logits = model(input_im)
             target_logit = torch.sum(logits * labels, dim=1)
@@ -54,11 +57,20 @@ class EnsembleGenerator(nn.Module):
             else:
                 class_loss = torch.clamp(target_logit-second_logit, min=self.k)
             total_class_loss += class_loss
-            pred_dist += F.softmax(logits)
+            pred_dstrb = F.softmax(logits)
+            pred_dstrbs.append(pred_dstrb)
+            total_pred_dstrb += pred_dstrb
         dist_loss = torch.sum(torch.pow(corrupt_im - x, 2).view(self.batch_size, -1), dim=1)
-        return torch.sum(dist_loss + c * total_class_loss), dist_loss, corrupt_im, pred_dist / self.n_models, total_class_loss
+        return torch.sum(dist_loss + c * total_class_loss), dist_loss, \
+                input_im, pred_dstrbs, total_pred_dstrb / self.n_models
 
     def generate(self, data, models, args, fh):
+        adv_ims = []
+        for i in xrange(data.n_batches):
+            adv_ims.append(self.generate_batch(data[i], models, args, fh))
+        return np.vstack(adv_ims)
+
+    def generate_batch(self, batch, models, args, fh):
         '''
         Generate adversarial noise using fast gradient method.
 
@@ -69,10 +81,6 @@ class EnsembleGenerator(nn.Module):
             - fh: file handle for logging progress
         outputs:
             - noise: n_ims x im_size x im_size x n_channels
-
-        TODO
-            - handle non batch_size inputs (smaller and larger)
-            - in converting to tanh space, seems to expect values in (-1, 1)
         '''
 
         def compare(x, y):
@@ -82,20 +90,15 @@ class EnsembleGenerator(nn.Module):
             '''
             return x == y if self.targeted else x != y
 
-        if isinstance(data, tuple):
-            ins = ins.numpy() if isinstance(data[0], torch.FloatTensor) else data[0]
-            outs = outs.numpy() if not isinstance(data[1], np.ndarray) else data[1]
-        elif isinstance(data, Dataset):
-            ins = data.ins.numpy()
-            outs = data.outs.numpy()
-        else:
-            raise TypeError("Invalid data format")
+        ins, outs = batch[0].numpy(), batch[1].numpy()
+        batch_size = ins.shape[0]
 
         # convert inputs to arctanh space
         if self.mean is not None:
             ins = (ins * self.std) + self.mean
-        ins = ins - ins.min()
-        ins = ins / ins.max()
+        for i in xrange(ins.shape[0]):
+            ins[i] = ins[i] - ins[i].min()
+            ins[i] = ins[i] / ins[i].max()
         assert ins.max() <= 1.0 and ins.min() >= 0.0 # in [0, 1]
         tanh_ins = 1.999999 * (ins - .5) # in (-1, 1)
         tanh_ins = torch.FloatTensor(np.arctanh(tanh_ins)) # in tanh space
@@ -107,25 +110,26 @@ class EnsembleGenerator(nn.Module):
         one_hot_targs = torch.FloatTensor(one_hot_targs)
         outs = torch.LongTensor(outs)
 
-        batch_size = self.batch_size
-        lower_bounds = np.zeros(batch_size)
-        upper_bounds = np.ones(batch_size) * 1e10
-        opt_consts = torch.ones((batch_size,1)) * self.init_const
+        lower_bounds = torch.zeros(batch_size)
+        upper_bounds = torch.ones(batch_size) * 1e10
+        opt_cs = torch.ones((batch_size,1)) * self.init_const
 
         overall_best_ims = np.zeros(ins.size())
         overall_best_dists = [1e10] * batch_size
-        overall_best_classes = [-1] * batch_size
 
         # variable to optimize
+        # TODO
+        # - random initialization
+        # - multiple restarts?
         w = torch.zeros(ins.size())
 
         if self.use_cuda:
-            tanh_ins, ins, one_hot_targs, w, opt_consts = \
+            tanh_ins, ins, one_hot_targs, w, opt_cs = \
                 tanh_ins.cuda(), ins.cuda(), one_hot_targs.cuda(), \
-                w.cuda(), opt_consts.cuda()
-        tanh_ins, ins, one_hot_targs, w, opt_consts = \
+                w.cuda(), opt_cs.cuda()
+        tanh_ins, ins, one_hot_targs, w, opt_cs = \
             Variable(tanh_ins), Variable(ins), Variable(one_hot_targs), \
-            Variable(w, requires_grad=True), Variable(opt_consts)
+            Variable(w, requires_grad=True), Variable(opt_cs)
 
         if self.mean is not None:
             mean = torch.FloatTensor(self.mean)
@@ -139,9 +143,14 @@ class EnsembleGenerator(nn.Module):
 
         start_time = time.time()
         for b_step in xrange(self.binary_search_steps):
-            log(fh, '\tBinary search step %d \tavg const: %s \tmin const: %s \tmax const: %s' % (b_step, opt_consts.mean().data[0], opt_consts.min().data[0], opt_consts.max().data[0]))
+            log(fh, ('\tBinary search step %d \tavg const: %s' 
+                     '\tmin const: %s \tmax const: %s') % 
+                     (b_step+1, opt_cs.mean().data[0], 
+                     opt_cs.min().data[0], opt_cs.max().data[0]))
 
-            w.data.zero_()
+            #w.data.zero_()
+            #w.data.uniform_(-.1, .1)
+            w.data.normal_(0, .1)
             # lazy way to reset optimizer parameters
             if args.generator_optimizer == 'sgd':
                 optimizer = optim.SGD([w], lr=args.generator_lr, momentum=args.momentum)
@@ -160,8 +169,8 @@ class EnsembleGenerator(nn.Module):
             prev_loss = 1e6
             for step in xrange(args.n_generator_steps):
                 optimizer.zero_grad()
-                obj, dists, corrupt_ims, pred_dists, class_losses = \
-                    self(tanh_ins, ins, w, opt_consts, \
+                obj, dists, corrupt_ims, pred_dstrbs, total_pred_dstrb = \
+                    self(tanh_ins, ins, w, opt_cs, \
                         one_hot_targs, models, mean, std)
                 total_loss = obj.data[0]
                 obj.backward()
@@ -169,13 +178,23 @@ class EnsembleGenerator(nn.Module):
 
                 if not (step % (args.n_generator_steps / 10.)) and step:
                     # Logging every 1/10
-                    _, preds = pred_dists.topk(1, 1, True, True)
+                    _, preds = total_pred_dstrb.topk(1, 1, True, True)
                     n_correct = torch.sum(torch.eq(preds.data.cpu(), outs))
-                    n_consensus = torch.sum(torch.eq(class_losses.data.cpu(), 0))
+
+                    n_consensus = 0
+                    for i in xrange(outs.size()[0]):
+                        if self.targeted:
+                            n_consensus += int(sum([outs[i] == dstrb.topk(1, 1, True, True)[1][i].data.cpu()[0] for dstrb in pred_dstrbs]) == self.n_models)
+                        else:
+                            n_consensus += int(sum([outs[i] != dstrb.topk(1, 1, True, True)[1][i].data.cpu()[0] for dstrb in pred_dstrbs]) == self.n_models)
                     if not self.targeted:
                         n_correct = batch_size - n_correct
-                        n_consensus = batch_size - n_consensus
-                    log(fh, '\t\tStep %d \tobjective: %.3f \tavg dist: %.3f \tn targeted class: %d \tn consensus exs: %d \t(%.3f s)' % (step, total_loss, torch.mean(dists.data), n_correct, n_consensus, time.time() - start_time))
+                    log(fh, ('\t\tStep %d \tobjective: %06.3f '
+                             '\tavg dist: %06.3f \tn targeted class: %02d'
+                             '\tn consensus exs: %d \t(%.3f s)') % 
+                             (step, total_loss, torch.mean(dists.data), 
+                                 n_correct, n_consensus, 
+                                 time.time() - start_time))
 
                     # Check for early abort
                     if self.early_abort and total_loss > prev_loss*.9999:
@@ -185,37 +204,40 @@ class EnsembleGenerator(nn.Module):
                     #scheduler.step(total_loss, step)
 
                 # bookkeeping
-                for e, (dist, pred_dist, im) in enumerate(zip(dists, pred_dists, corrupt_ims)):
-                    #logit[outs[e]] += self.k
-                    pred = np.argmax(pred_dist.data.cpu().numpy())
-                    if not compare(pred, outs[e]): # if not the targeted class, continue
+                for i, (dist, im) in enumerate(zip(dists, corrupt_ims)):
+
+                    if self.targeted:
+                        n_voters = sum([outs[i] == dstrb.topk(1, 1, True, True)[1][i].data[0] for dstrb in pred_dstrbs])
+                    else:
+                        n_voters = sum([outs[i] != dstrb.topk(1, 1, True, True)[1][i].data[0] for dstrb in pred_dstrbs])
+                    if n_voters != self.n_models:
                         continue
-                    if dist < best_dists[e]: # if smaller noise within the binary search step
-                        best_dists[e] = dist
-                        best_classes[e] = pred
-                    if dist < overall_best_dists[e]: # if smaller noise overall
-                        overall_best_dists[e] = dist
-                        overall_best_classes[e] = pred
-                        overall_best_ims[e] = im.data.cpu().numpy()
+
+                    if dist < best_dists[i]: 
+                        best_dists[i] = dist
+                        best_classes[i] = n_voters
+                    if dist < overall_best_dists[i]:
+                        overall_best_dists[i] = dist
+                        overall_best_ims[i] = im.data.cpu().numpy()
 
             # binary search stuff
-            for e in xrange(batch_size):
-                if compare(best_classes[e], outs[e]) and best_classes[e] != -1:
-                    # success; looking for lower c
-                    upper_bounds[e] = \
-                        min(upper_bounds[e], opt_consts.data[e][0])
-                    if upper_bounds[e] < 1e9:
-                        opt_consts.data[e][0] = \
-                            (lower_bounds[e] + upper_bounds[e]) / 2
+            for i in xrange(batch_size):
+                if best_classes[i] != -1: # success; search w/ smaller c
+                    assert best_classes[i] == self.n_models
+                    upper_bounds[i] = min(upper_bounds[i], opt_cs.data[i,0])
+                    if upper_bounds[i] < 1e9:
+                        opt_cs[i] = (lower_bounds[i] + upper_bounds[i]) / 2
                 else: # failure, search with greater c
-                    lower_bounds[e] = \
-                        max(lower_bounds[e], opt_consts.data[e][0])
-                    if upper_bounds[e] < 1e9:
-                        opt_consts.data[e][0] = \
-                            (lower_bounds[e] + upper_bounds[e]) / 2
+                    lower_bounds[i] = max(lower_bounds[i], opt_cs.data[i,0])
+                    if upper_bounds[i] < 1e9:
+                        opt_cs[i] = (lower_bounds[i] + upper_bounds[i]) / 2
                     else:
-                        opt_consts.data[e][0] *= 10
+                        opt_cs[i] = opt_cs[i] * 10
 
-        if self.mean is not None:
-            overall_best_ims = (overall_best_ims - self.mean) / self.std
+        # DEBUGGING STUFF
+        t_ins = Variable(torch.FloatTensor(overall_best_ims))
+        t_outs = F.softmax(models[0](t_ins.cuda()))
+        probs, preds = t_outs.topk(1,1,True,True)
+        n_correct = torch.sum(torch.eq(preds.data.cpu(), outs))
+
         return overall_best_ims

@@ -24,7 +24,8 @@ model_urls = {
 
 model_paths = {
     'vgg16bn': '/n/regal/rush_lab/awang/models/vgg16bn.ckpt',
-    'vgg19bn': '/n/regal/rush_lab/awang/models/vgg19bn.ckpt'
+    'vgg19bn': '/n/regal/rush_lab/awang/models/vgg19bn.ckpt',
+    'vgg19': '/n/regal/rush_lab/awang/models/vgg19.ckpt'
 }
 
 class VGG(Model):

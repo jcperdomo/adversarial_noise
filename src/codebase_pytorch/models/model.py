@@ -23,7 +23,6 @@ class Model(nn.Module):
 
     def __init__(self):
         super(Model, self).__init__()
-        self.eval() # start in eval mode; train_model() will call self.train()
 
 
     def forward(self):

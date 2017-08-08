@@ -8,13 +8,14 @@ class Dataset:
 
     TODO
         - shuffle methods
+        - make a generator thing
     '''
 
-    def __init__(self, ins, outs, args):
+    def __init__(self, ins, outs, batch_size, args):
         '''
          
         '''
-        self.batch_size = args.batch_size
+        self.batch_size = batch_size
         if not isinstance(ins, torch.FloatTensor):
             # TODO assert numpy
             assert len(ins.shape) == 4
@@ -23,7 +24,6 @@ class Dataset:
             self.n_ins = ins.shape[0]
             self.n_batches = int(math.ceil(1.0 * self.n_ins / self.batch_size))
             ins = torch.FloatTensor(ins)
-
         else:
             self.n_ins = int(ins.size()[0])
             self.n_batches = int(math.ceil(1.0 * self.n_ins / self.batch_size))
