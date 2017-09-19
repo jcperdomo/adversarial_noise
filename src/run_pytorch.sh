@@ -33,7 +33,7 @@ INIT_SCALE=.1
 TRAIN=0
 OPTIMIZER=adagrad
 N_EPOCHS=0
-LR=.01
+LR=.1
 MOMENTUM=.9
 WEIGHT_DECAY=.0002
 NESTEROV=true
@@ -42,16 +42,16 @@ BATCH_SIZE=50
 GENERATE=1
 GENERATOR=ensemble
 N_GEN_STEPS=100
-GENERATOR_BATCH_SIZE=10
-TARGET=none
+TARGET='next'
 
-GEN_EPS=.75
+GEN_EPS=.1
 GEN_ALPHA=0.0
 
-GEN_INIT_OPT_CONST=1.
+GEN_INIT_OPT_CONST=100
 GEN_OPTIMIZER=adam
-GEN_LR=.1
-N_BINARY_SEARCH_STEPS=5
+GEN_LR=.01
+GEN_BATCH_SIZE=10
+N_BINARY_SEARCH_STEPS=3
 
 if [ ! -f "$MODEL_PATH" ] || [ $TRAIN_NEW -eq "1" ]; then
     # Train a good model and save it
@@ -63,5 +63,5 @@ else
     echo "Loading a model"
     TRAIN=0
 fi
-CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/${EXP_NAME}.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL_ACTION $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LR --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps $N_GEN_STEPS --target $TARGET --generator_optimizer $GEN_OPTIMIZER --generator_lr $GEN_LR --generator_init_opt_const $GEN_INIT_OPT_CONST --model $MODEL --generate $GENERATE --train $TRAIN --n_binary_search_steps $N_BINARY_SEARCH_STEPS --generator_batch_size $GENERATOR_BATCH_SIZE"
+CMD="python -m src/codebase_pytorch/main --data_path $EXP_DIR --log_file $LOG_PATH/${EXP_NAME}.log --im_file $EXP_DIR/te.hdf5 --out_file $OUT_PATH/$EXP_NAME.hdf5 --out_path $OUT_PATH --$MODEL_ACTION $MODEL_PATH --optimizer $OPTIMIZER --n_epochs $N_EPOCHS --init_scale .1 --n_kerns $N_KERNELS --lr $LR --n_modules $N_MODULES --batch_size $BATCH_SIZE --generator $GENERATOR --alpha $GEN_ALPHA --eps $GEN_EPS --n_generator_steps $N_GEN_STEPS --target $TARGET --generator_optimizer $GEN_OPTIMIZER --generator_lr $GEN_LR --generator_init_opt_const $GEN_INIT_OPT_CONST --model $MODEL --generate $GENERATE --train $TRAIN --n_binary_search_steps $N_BINARY_SEARCH_STEPS --generator_batch_size $GEN_BATCH_SIZE"
 eval $CMD

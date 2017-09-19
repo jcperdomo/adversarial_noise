@@ -28,10 +28,10 @@ class FGSMGenerator():
 
         inputs:
             - images: n_images x im_size x im_size x n_channels
+                Images should be in [0,1]^d (unnormalized)
             - model: a model class
         outputs:
             - adversaries: n_images x im_size x im_size x n_channels
-            - noise: n_ims x im_size x im_size x n_channels
         '''
 
         if isinstance(data, tuple):
@@ -58,4 +58,4 @@ class FGSMGenerator():
             if self.targeted:
                 gradients *= -1.
             adv_noise = self.eps * np.sign(gradients)
-        return adv_noise
+        return ins.numpy() + adv_noise

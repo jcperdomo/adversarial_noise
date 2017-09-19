@@ -15,12 +15,12 @@ from src.codebase_pytorch.utils.hooks import print_outputs, print_grads
 # Classifiers
 from src.codebase_pytorch.models.ModularCNN import ModularCNN
 from src.codebase_pytorch.models.mnistCNN import MNISTCNN
-from src.codebase_pytorch.models.squeezeNet import SqueezeNet, squeezenet1_1
+from src.codebase_pytorch.models.squeezeNet import SqueezeNet
 from src.codebase_pytorch.models.openFace import openFaceClassifier
-from src.codebase_pytorch.models.resnet import ResNet, Bottleneck, resnet152, resnet101
+from src.codebase_pytorch.models.resnet import ResNet, Bottleneck, resnet152
 from src.codebase_pytorch.models.inception import Inception3
-from src.codebase_pytorch.models.densenet import DenseNet, densenet161, densenet201
-from src.codebase_pytorch.models.vgg import vgg19_bn, vgg19
+from src.codebase_pytorch.models.densenet import DenseNet, densenet161
+from src.codebase_pytorch.models.vgg import vgg19_bn
 from src.codebase_pytorch.models.alexnet import AlexNet, alexnet
 
 # Generators
@@ -77,7 +77,7 @@ def main(arguments):
 
     # Generator training options
     parser.add_argument("--generator_optimizer", help="Optimizer to use for Carlini generator", type=str, default='adam')
-    parser.add_argument("--generator_batch_size", help="Batch size for generator", type=int, default=10)
+    parser.add_argument("--generator_batch_size", help="Batch size for generator", type=int, default=50)
     parser.add_argument("--generator_lr", help="Learning rate for generator optimization when necessary", type=float, default=.1)
     parser.add_argument("--n_generator_steps", help="Number of iterations to run generator for", type=int, default=1)
 
@@ -90,6 +90,10 @@ def main(arguments):
     parser.add_argument("--generator_confidence", help="Confidence in obfuscated image for Carlini generator", type=float, default=0.)
     parser.add_argument("--early_abort", help="1 if should abort if not making progress", type=int, default=0)
     parser.add_argument("--n_binary_search_steps", help="Number of steps in binary search for optimal c", type=int, default=5)
+
+    # Ensemble options
+    parser.add_argument("--n_mwu_rounds", help="Number of rounds of MWU", type=int, default=5)
+    parser.add_argument("--mwu_eta", help="MWU update constant, should be <= .5", type=int, default=.1)
 
     args = parser.parse_args(arguments)
 
@@ -145,7 +149,7 @@ def main(arguments):
         raise NotImplementedError
     if args.cuda:
         model.cuda()
-    model.eval()
+    model.eval() # this should be redundant now
     log(log_fh, "Done!")
 
     # Optional load model
@@ -177,14 +181,14 @@ def main(arguments):
         with h5py.File(args.im_file, 'r') as fh:
             clean_ims = fh['ins'][:]
             te_data = Dataset(fh['ins'][:], fh['outs'][:], 
-                            args.generator_batch_size, args)
+                        args.generator_batch_size, args)
         log(log_fh, "\tLoaded %d images!" % clean_ims.shape[0])
 
         # Choose a class to target
         if args.target == 'random':
             data = Dataset(clean_ims, 
                 np.random.randint(args.n_classes, size=te_data.n_ins), 
-                                args.generator_batch_size, args)
+                args.generator_batch_size, args)
             log(log_fh, "\t\ttargeting random class")
         elif args.target == 'least':
             preds = model.predict(te_data)
@@ -192,7 +196,7 @@ def main(arguments):
             data = Dataset(clean_ims, targs, args.generator_batch_size, args)
             log(log_fh, "\t\ttargeting least likely class")
             target_s = 'least likely'
-        elif args.target == 'next_likely':
+        elif args.target == 'next':
             preds = model.predict(te_data)
             one_hot = np.zeros((te_data.n_ins, args.n_classes))
             one_hot[np.arange(te_data.n_ins), te_data.outs.numpy().astype(int)] = 1
@@ -219,35 +223,23 @@ def main(arguments):
         elif args.generator == 'ensemble':
             # build a shit ton of models
             old_model = model
-            rn152 = resnet152(pretrained=True)
-            rn101 = resnet101(pretrained=True)
-            dn161 = densenet161(pretrained=True)
-            #dn201 = densenet201(pretrained=True)
-            #alex = alexnet(pretrained=True)
+            resnet = resnet152(pretrained=True)
+            densenet = densenet161(pretrained=True)
+            alex = alexnet(pretrained=True)
             vgg = vgg19_bn(pretrained=True)
-            squeezenet = squeezenet1_1(pretrained=True)
             if args.cuda:
-                rn152 = rn152.cuda()
-                rn101 = rn101.cuda()
-                dn161 = dn161.cuda()
-                #dn201 = dn201.cuda()
+                resnet = resnet.cuda()
+                densenet = densenet.cuda()
+                alex = alex.cuda()
                 vgg = vgg.cuda()
-                #alex = alex.cuda()
-                squeezenet = squeezenet.cuda()
-            model = [rn152, dn161, \
-                    #dn201,
-                    squeezenet, 
-                    #alex,
-                    vgg,
-                    rn101]
+            model = [resnet, densenet, alex, vgg]
             args.n_models = len(model)
-            for m in model:
-                m.eval()
 
             # build the generator
-            generator = EnsembleGenerator(args, (mean, std))
-            log(log_fh, ("\tBuilt ensemble optimization generator"))# with "
-                            #"ResNet, DenseNet, AlexNet, and VGG"))
+            generator = EnsembleGenerator(args, model, data, te_data.outs, 
+                    log_fh, (mean, std))
+            log(log_fh, ("\tBuilt ensemble generator with "
+                            "ResNet, Densenet, AlexNet, and VGG"))
         else:
             raise NotImplementedError
 
@@ -264,9 +256,9 @@ def main(arguments):
         # Compute the corruption rate
         log(log_fh, "Computing corruption rate...")
         corrupt_data = Dataset(corrupt_ims, te_data.outs, 
-                                args.batch_size, args)
+                                args.generator_batch_size, args)
         target_data = Dataset(corrupt_ims, data.outs, 
-                                args.batch_size, args)
+                                args.generator_batch_size, args)
         _, clean_top1, clean_top5 = model.evaluate(te_data)
         _, corrupt_top1, corrupt_top5 = model.evaluate(corrupt_data)
         _, target_top1, target_top5 = model.evaluate(target_data)
