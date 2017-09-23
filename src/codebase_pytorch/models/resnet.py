@@ -31,8 +31,11 @@ model_urls = {
 }
 
 model_paths = {
-    'resnet101': '/n/regal/rush_lab/awang/models/resnet101.ckpt',
-    'resnet152': '/n/regal/rush_lab/awang/models/resnet152.ckpt'
+    'resnet18': './model_weights/resnet18-5c106cde.pth',
+    'resnet34': './model_weights/resnet34-333f7ec4.pth',
+    'resnet50': './model_weights/resnet50-19c8e357.pth',
+    'resnet101': './model_weights/resnet101-5d3b4d8f.pth',
+    'resnet152': './model_weights/resnet152-b121ed2d.pth'
 }
 
 
@@ -174,6 +177,8 @@ class ResNet(Model):
 
         return x
 
+# TODO: abtract this away into a single function
+
 
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
@@ -182,7 +187,6 @@ def resnet18(pretrained=False, **kwargs):
     """
     model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
     if pretrained:
-        #model.load_state_dict(model_zoo.load_url(model_urls['resnet18']))
         model.load_state_dict(torch.load(model_paths['resnet18']))
     return model
 
@@ -194,7 +198,6 @@ def resnet34(pretrained=False, **kwargs):
     """
     model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        #model.load_state_dict(model_zoo.load_url(model_urls['resnet34']))
         model.load_state_dict(torch.load(model_paths['resnet34']))
     return model
 
@@ -206,7 +209,6 @@ def resnet50(pretrained=False, **kwargs):
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        #model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
         model.load_state_dict(torch.load(model_paths['resnet50']))
     return model
 
@@ -218,7 +220,6 @@ def resnet101(pretrained=False, **kwargs):
     """
     model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
     if pretrained:
-        #model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
         model.load_state_dict(torch.load(model_paths['resnet101']))
     return model
 
@@ -230,6 +231,6 @@ def resnet152(pretrained=False, **kwargs):
     """
     model = ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
     if pretrained:
-        #model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
         model.load_state_dict(torch.load(model_paths['resnet152']))
     return model
+

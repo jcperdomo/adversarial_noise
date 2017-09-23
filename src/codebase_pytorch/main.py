@@ -190,12 +190,14 @@ def main(arguments):
                 np.random.randint(args.n_classes, size=te_data.n_ins), 
                 args.generator_batch_size, args)
             log(log_fh, "\t\ttargeting random class")
+
         elif args.target == 'least':
             preds = model.predict(te_data)
             targs = np.argmin(preds, axis=1)
             data = Dataset(clean_ims, targs, args.generator_batch_size, args)
             log(log_fh, "\t\ttargeting least likely class")
             target_s = 'least likely'
+
         elif args.target == 'next':
             preds = model.predict(te_data)
             one_hot = np.zeros((te_data.n_ins, args.n_classes))
@@ -203,10 +205,12 @@ def main(arguments):
             targs = np.argmax(preds * (1. - one_hot), axis=1)
             data = Dataset(clean_ims, targs, args.generator_batch_size, args)
             log(log_fh, "\t\ttargeting next likely class")
+
         elif args.target == 'none':
             data = Dataset(clean_ims, te_data.outs.numpy().copy(), 
                             args.generator_batch_size, args)
             log(log_fh, "\t\ttargeting no class")
+
         else:
             raise NotImplementedError
 
@@ -214,9 +218,11 @@ def main(arguments):
         if args.generator == 'random':
             generator = RandomNoiseGenerator(args)
             log(log_fh, "\tBuilt random generator with eps %.3f" % args.eps)
+
         elif args.generator == 'carlini_l2':
             generator = CarliniL2Generator(args, (mean, std))
             log(log_fh, "\tBuilt C&W generator")
+
         elif args.generator == 'fgsm':
             generator = FGSMGenerator(args)
             log(log_fh, "\tBuilt fgsm generator with eps %.3f" % args.eps)

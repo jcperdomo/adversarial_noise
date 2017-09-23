@@ -132,7 +132,6 @@ class Model(nn.Module):
         return total_loss / data.n_ins, 100. * top1_correct / data.n_ins, \
             100. * top5_correct / data.n_ins
 
-
     def predict(self, data):
         '''
         Get class predictions for data
