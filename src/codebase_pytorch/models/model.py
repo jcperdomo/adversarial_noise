@@ -157,5 +157,5 @@ class Model(nn.Module):
         ins, targs = Variable(ins, requires_grad=True), Variable(targs)
         outs = self(ins)
         loss = F.cross_entropy(outs, targs)
-        loss.backward(retain_variables=True)
-        return ins.grad.data.cpu().numpy()
+        loss.backward(retain_graph=True)
+        return ins.grad.data.cpu() #.numpy()

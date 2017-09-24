@@ -1,13 +1,14 @@
 import torch
 import torch.nn as nn
 import math
-from src.codebase_pytorch.models.model import Model
+from model import Model
 
 
 __all__ = [
     'VGG', 'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn', 'vgg16', 'vgg16_bn',
     'vgg19_bn', 'vgg19',
 ]
+
 
 
 model_urls = {
@@ -21,20 +22,21 @@ model_urls = {
     'vgg19_bn': 'https://download.pytorch.org/models/vgg19_bn-c79401a0.pth',
 }
 
+abs_path = "/Users/juanperdomo/adversarial_noise/src/codebase_pytorch/models"
 model_paths = {
-    'vgg11': './model_weights/vgg11-bbd30ac9.pth',
-    'vgg13': './model_weights/vgg13-c768596a.pth',
-    'vgg16': './model_weights/vgg16-397923af.pth',
-    'vgg19': './model_weights/vgg19-dcbb9e9d.pth',
-    'vgg11_bn': './model_weights/vgg11_bn-6002323d.pth',
-    'vgg13_bn': './model_weights/vgg13_bn-abd245e5.pth',
-    'vgg16_bn': './model_weights/vgg16_bn-6c64b313.pth',
-    'vgg19_bn': './model_weights/vgg19_bn-c79401a0.pth',
+    'vgg11': abs_path + '/model_weights/vgg11-bbd30ac9.pth',
+    'vgg13': abs_path + '/model_weights/vgg13-c768596a.pth',
+    'vgg16': abs_path + '/model_weights/vgg16-397923af.pth',
+    'vgg19': abs_path + '/model_weights/vgg19-dcbb9e9d.pth',
+    'vgg11_bn': abs_path + '/model_weights/vgg11_bn-6002323d.pth',
+    'vgg13_bn': abs_path + '/model_weights/vgg13_bn-abd245e5.pth',
+    'vgg16_bn': abs_path + '/model_weights/vgg16_bn-6c64b313.pth',
+    'vgg19_bn': abs_path + '/model_weights/vgg19_bn-c79401a0.pth',
 }
 
 class VGG(Model):
 
-    def __init__(self, features, num_classes=1000):
+    def __init__(self, features, num_classes=1000, use_cuda=False):
         super(VGG, self).__init__()
         self.features = features
         self.classifier = nn.Sequential(
@@ -47,7 +49,7 @@ class VGG(Model):
             nn.Linear(4096, num_classes),
         )
         self._initialize_weights()
-        self.use_cuda = 1
+        self.use_cuda = use_cuda
 
     def forward(self, x):
         x = self.features(x)
@@ -182,5 +184,9 @@ def vgg19_bn(pretrained=False, **kwargs):
         model.load_state_dict(torch.load(model_paths['vgg19bn']))
     return model
 
-if __name__ == "__main__":
-    vgg16(pretrained=True)
+if __name__ == '__main__':
+    import os
+    print  "HEY"
+    print os.getcwd()
+    vgg16(pretrained=True, use_cuda=False)
+    print "Success"
